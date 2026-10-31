@@ -1,7 +1,0 @@
-@import "tailwindcss";
-
-/* Design tokens — PRD §10.1: one palette, semantic status colors */
-@theme {
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-}
