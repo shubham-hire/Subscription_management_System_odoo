@@ -1,46 +1,58 @@
-# Dev A Guided Build — Full Team Scaffold + Dependency-Narrated Execution
+# B's Absorption Plan — Dev A takes the backend, ~4 hours
 
 ## Context
 
-We're executing the 8-hour hackathon build in [Plan.md](Plan.md) (NestJS + Prisma + Postgres, React + Vite + Tailwind; 2 backend + 1 frontend). You are **Dev A (Platform)** — your workstream is the critical path: Dev B blocks on your schema/auth/seed, and one of your tasks (payments endpoint) blocks on Dev B's invoice confirm/cancel. You asked for a plan that (a) covers your full workstream, (b) scaffolds the whole repo so B and C start unblocked (full team scaffold), and (c) has me **explicitly announce every dependency moment as we build** — when to ping B, when you must wait for B, and what to do while waiting.
+Dev B had to leave. Their workstream — domain pure functions, subscriptions lifecycle, the billing engine, and reports — is the only thing standing between the demo path and completion. Dev C continues 100% frontend against the **frozen contract** in `docs/api-contract.md` (they must not wait on you). You absorb all of B's backend solo. Decisions locked: ~4h left · billing-run invoices are created **Confirmed** directly (new decision **D18**) · pause/resume/renew, template flow, and forgot-password are **officially cut**.
 
-## Deliverables
+**Deliverable:** `Plan-B.md` (this plan, saved as a file) + the implementation executed live with me narrating, same style as the Dev A runbook.
 
-1. **`Plan-DevA.md`** — your personal runbook: task-by-task checklist with dependency flags (`→ PING B` / `⏸ NEEDS B` / fallback tasks), copy-paste chat messages for each ping, and the schema-ownership rule.
-2. **The actual implementation** (this session), executed in the order below. At each step I open with a dependency banner — e.g. "🔔 PING B now: schema migrated — send this message: …" or "⏸ payments testing needs B's invoice confirm; meanwhile do X". The runbook's flags are what I'll be following live.
+## The 4-hour schedule (blocks in execution order)
 
-## Execution order (maps to Plan.md §5 timeline)
+**Block 1 (~40 min) — Domain functions, make B's 13 red tests green.**
+`server/src/domain/` — skeletons and exact specs already exist, tests in `domain.spec.ts` encode them:
+- `billing-dates.ts` `addPeriod(date, period)` — month-end clamp (Jan 31 → Feb 28/29 incl. leap), daily/weekly/monthly/yearly; no mutation.
+- `pricing.ts` `computeLine` / `computeInvoiceTotals` — decimal.js, string money, discount clamped at subtotal (DSC-07), tax exclusive (D14).
+- `transitions.ts` `validateTransition` — the §5.1 map + plan flags (`pausable`/`closable`/`renewable`) + quotation expiry (D10).
+Gate: `npm run test:domain` green before anything else.
 
-**Step 0 — Env verify (~2 min):** node ≥ 20, Docker daemon running. Fix or flag before anything else.
+**Block 2 (~45 min) — Subscriptions module** (`server/src/sales/`): `POST /subscriptions` (staff/admin), `GET /subscriptions` + `/:id` (staff/admin; customer-own via portal already done), `POST /subscriptions/:id/{confirm,activate,close}`.
+- Create: validate customer exists, plan within availability window (PLN-03), per-line: `unit_price = product.salesPrice + variant.priceExtra` (PRD-03, snapshot), quantity ≥ plan.min_quantity (D14), tax defaults `product.taxId`; `expiry = start + 1 period` via `addPeriod` (D3), `next_billing_date = start`, status `draft`, number via DB default.
+- Transitions: `validateTransition` from domain + write `subscription_status_history` row (user + timestamp, SUB-05) + update status. Invalid → 400 with the domain error string (acceptance #7).
+- Line edits only in draft/quotation (D13) — PATCH lines endpoint, guarded by status.
 
-**Step 1 — Team scaffold:** `docker-compose.yml` (postgres:16, port 5432; Mailpit commented out), `.gitignore`, monorepo layout (`server/`, `web/`, `docs/`), NestJS + Prisma wired and booting, Vite + React + TS + Tailwind shell booting, `README.md` (currently empty — quickstart: compose up → migrate → seed → run both), `docs/api-contract.md` seeded from PRD §8, `docs/demo-script.md` extracted from Plan.md §7. Commit. **→ C can pull and start the UI immediately; → B can start pure functions.**
+**Block 3 (~60 min) — Billing engine** (`server/src/billing/`): `POST /billing/run` (staff/admin) — demo scene 5.
+One service, per-subscription transactions (INV-04, §6.2):
+1. **Housekeeping** (D9): confirmed subs with `startDate ≤ today` → active; active subs on `auto_close` plans with `expiryDate ≤ today` → closed.
+2. **Billing loop**: active subs with `nextBillingDate ≤ today`; while true (catch-up for missed periods): build invoice lines from subscription lines; **auto-apply discounts** (§6.3/D1: rules active by date range, `times_used < max_uses`, min qty/purchase met, scope `product` via `discount_products` or `subscription`; best single rule per line by largest saving); compute via `computeLine`/`computeInvoiceTotals`; create invoice **status Confirmed (D18)**, `period_start = nextBillingDate`, number via DB default; increment `times_used` in the same transaction; `nextBillingDate = addPeriod(nextBillingDate, plan.billingPeriod)`.
+3. **Idempotency**: unique `(subscription_id, period_start)` → on conflict skip (acceptance #8: run twice → 0 created). Failures don't block the loop (per-sub transaction); count into summary.
+4. Record `billing_runs` row + return `{created, skipped, failed, run_id}`.
 
-**Step 2 — Schema + seed (the critical handoff):** full `prisma/schema.prisma` — all 19 tables from PRD §7 with Plan.md §2 decisions applied (D1–D17: auto-discounts, informational plan price, `Decimal` money, unique `(subscription_id, period_start)`, status history, `users.customer_id`). `prisma migrate dev` clean. Seed v1: admin/staff/customer logins, 1 product + Odoo variant (+560), 1 plan, 18% tax, 1 discount rule. **🔔 PING B #1** ("schema on main, pull + migrate + regenerate client") then **PING B #2** (credentials + catalog contents). Commit.
+**Block 4 (~30 min) — Reports** (`server/src/reports/`): `GET /reports/summary` (active subs count, revenue collected = Σ`amountPaid`, outstanding = Σ(`total`−`amountPaid`) where confirmed, overdue count + amount) and `GET /reports/overdue` (confirmed, balance>0, due<today, ordered by dueDate, with customer contact + days overdue — RPT-04). DB aggregates only (§9.1); admin+staff roles.
 
-**Step 3 — common/ + auth:** PrismaService, global error filter producing PRD §8 format (`{error:{code,message,fields}}`), `RolesGuard` + `@Roles()` decorator, decimal helpers, bcrypt + JWT auth module (`signup`, `login`, `me`; password rule per AUTH-03; duplicate-email per AUTH-02). **🔔 PING B #3** ("guard live — decorate endpoints, `req.user = {id, role, customer_id}`"). Commit.
+**Block 5 (~40 min) — Tests + demo-path verification**
+- Extend `test/api.e2e.spec.ts` (or new `test/billing.e2e.spec.ts`): variant pricing +560 (acceptance #4), invalid transition rejected + history written (#7), billing run twice → 0 created (#8), catch-up bills missed periods once, discount auto-applies and stops at limit (#9).
+- Full walkthrough on dev DB: create sub → confirm → activate → run billing → pay (mirrors scenes 4–6).
+- `npm run test:all` green.
 
-**Step 4 — Catalog CRUD:** products + variants (price-extra), plans (behavior flags + availability window validation PLN-06), taxes (0–100), discounts (DSC-06 rules, scope via `discount_products`). All admin-only via guard. Seed catalog enriched. **🔔 PING B #5** ("catalog data in seed — billing run has something to consume"). Commit.
+**Final 25 min — buffer** for C's integration questions.
 
-**Step 5 — Contract freeze support (sync T+2.5):** I verify every endpoint built so far matches `docs/api-contract.md` shapes and flag any drift for the sync.
+## Coordination with C (do this first — 2 min)
 
-**Step 6 — Invoices read + payments, with the one ⏸:** `GET /invoices` (status/overdue filters, pagination), `GET /invoices/:id`, `POST /invoices/:id/payments` (PAY-02/06 validations: amount > 0, ≤ outstanding, invoice Confirmed). **⏸ NEEDS B #1:** end-to-end payment testing requires B's invoice confirm + billing run. **Fallback while waiting:** build DTOs/validation/pagination infrastructure and unit-test the payment validator with a seeded Confirmed invoice; if B's billing run lands, test through it. Commit.
+Send now: *"Re-plan: B's out, A absorbs backend. Contract in docs/api-contract.md is unchanged and still the truth. Your order: (1) subscription create flow + lifecycle buttons [shapes in contract §Owned by Dev B], (2) Run-billing button → shows `{created,skipped,failed}`, (3) dashboard → GET /reports/summary + /reports/overdue, (4) portal pages [endpoints live]. Invoices from billing arrive Confirmed — no confirm button needed. I'll ping when /subscriptions and /billing/run are live."*
 
-**Step 7 — Portal + scale:** portal endpoints scoped by `users.customer_id` (POR-05 object-level), indexes from PRD §7, scale seed (300–500 subs + invoices via `createMany`). **🔔 PING B #6** ("data's in — verify report queries + <2s"). Commit.
+Also: B's `domain/README.md` and the 13 red tests stay — they're now your spec; update `Plan.md` roles table only if time permits.
 
-**Step 8 — Verification (see below).**
+## Key reuse (no re-implementing)
 
-**Not in scope (owned by B/C):** billing run service, transitions/pricing pure functions (I scaffold only skeletons + failing tests in `server/src/domain/` with TODOs from PRD §6 so B starts on red tests), reports module, payments endpoint *for* B, any web UI beyond the shell + auth screens + one demo page for C.
+- `server/src/domain/` stubs + tests — the spec, not just helpers
+- `common/money.ts`, `common/validation.ts` (`IsMoneyString`), `common/prisma.service.ts`, error filter — same DTO patterns as `catalog.dto.ts`/`payment.dto.ts`
+- Schema already has: unique `(subscription_id, period_start)`, sequences, status-history table, `billing_runs`, indexes — **no migrations needed**
+- Payments module consumes billing's Confirmed invoices unchanged
 
 ## Verification
 
-- `docker compose up -d` → `prisma migrate dev` + `db seed` on a **fresh DB**, twice (proves reset script).
-- Auth: signup (weak-password 400 with field error, duplicate email 400), login → JWT, `me` returns role; staff hitting `POST /products` → 403; customer hitting admin routes → 403 (wrong-role matrix).
-- Catalog: CRUD round-trip per entity + validation rejections (PLN-06 date order, TAX-04 range, DSC-06 bounds).
-- Payments: >outstanding rejected, ≤0 rejected, Draft invoice rejected (seeded Confirmed invoice for the happy path).
-- Portal: customer token requesting another customer's invoice → 403/404.
-- Scale seed count check + one timed list query; `npm run build` passes in server and web.
-- Git log shows one commit per step (trunk-based per Plan.md).
-
-## During execution — how I narrate dependencies
-
-Every step I run opens with one of: `🔔 PING B #n` (B is unblocked — send the copy-paste message from the runbook now), `⏸ NEEDS B` (you're blocked on B — here's the fallback task until they land), or `✅ no dependency` (heads down). The runbook also lists the two reverse moments where you wait on B (invoice confirm before payments e2e; sync-only schema requests).
+1. `npm run test:domain` → 13/13 green (Block 1 gate)
+2. `npm run test:integration` → existing 26 + new billing/subscriptions specs green
+3. `npm run test:all` green; `nest build` clean
+4. Demo-path walkthrough on dev DB (scenes 4–6 end-to-end)
+5. Acceptance #4, #7, #8, #9 explicitly asserted by tests

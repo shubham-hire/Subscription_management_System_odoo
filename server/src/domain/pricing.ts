@@ -1,13 +1,9 @@
 /**
- * DEV B OWNS THIS FILE. Pure functions only — no Prisma, no Nest imports.
- * Money math MUST use decimal.js (Plan.md D4) and return strings with 2 decimals.
- *
- * PRD §6.1:
- *   line subtotal   = unit price × quantity
- *   line tax        = (line subtotal − line discount) × tax percentage   (tax exclusive, D14)
- *   invoice total   = Σ (line subtotal − line discount + line tax)
- * Discount never makes a line negative (DSC-07) — clamp discount at subtotal.
+ * Pure pricing math (PRD §6.1). Money MUST use decimal.js (D4) and return
+ * strings with 2 decimals. Discount clamped at subtotal (DSC-07), tax
+ * exclusive (D14). Ownership absorbed by Dev A (Plan-B.md).
  */
+import { Decimal } from 'decimal.js';
 
 export interface InvoiceLineInput {
   unit_price: string; // decimal string e.g. "3559.00"
@@ -31,12 +27,42 @@ export interface InvoiceTotals {
   total: string;
 }
 
+const D2 = (d: Decimal) => d.toFixed(2);
+
 export function computeLine(line: InvoiceLineInput): InvoiceLineResult {
-  // TODO(B): implement + make domain.spec.ts green
-  throw new Error('NOT IMPLEMENTED (Dev B): computeLine');
+  const unit = new Decimal(line.unit_price);
+  const qty = new Decimal(line.quantity);
+  const subtotal = unit.mul(qty);
+
+  let discount = new Decimal(line.discount_amount);
+  if (discount.isNegative()) discount = new Decimal(0); // DSC-07 lower clamp
+  if (discount.gt(subtotal)) discount = subtotal; // DSC-07 upper clamp
+
+  const taxable = subtotal.minus(discount);
+  const tax = taxable.mul(line.tax_percent).div(100);
+  const lineTotal = taxable.plus(tax);
+
+  return {
+    subtotal: D2(subtotal),
+    discount_amount: D2(discount),
+    tax_amount: D2(tax),
+    line_total: D2(lineTotal),
+  };
 }
 
 export function computeInvoiceTotals(lines: InvoiceLineResult[]): InvoiceTotals {
-  // TODO(B): implement + make domain.spec.ts green
-  throw new Error('NOT IMPLEMENTED (Dev B): computeInvoiceTotals');
+  const sum = (pick: (l: InvoiceLineResult) => string) =>
+    lines.reduce((acc, l) => acc.plus(pick(l)), new Decimal(0));
+
+  const subtotal = sum((l) => l.subtotal);
+  const discount = sum((l) => l.discount_amount);
+  const tax = sum((l) => l.tax_amount);
+  const total = sum((l) => l.line_total);
+
+  return {
+    subtotal: D2(subtotal),
+    discount_total: D2(discount),
+    tax_total: D2(tax),
+    total: D2(total),
+  };
 }

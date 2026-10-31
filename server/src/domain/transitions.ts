@@ -1,8 +1,6 @@
 /**
- * DEV B OWNS THIS FILE. Pure functions only — no Prisma, no Nest imports.
- * State machine per PRD §5.1 and Plan.md decisions D3/D10.
- *
- * Draft -> Quotation -> Confirmed -> Active -> Closed, plus Paused (Active <->).
+ * Subscription state machine (PRD §5.1) + plan flags (PLN-02) + quotation
+ * expiry (D10). Pure — no Prisma, no Nest. Ownership absorbed by Dev A.
  */
 export type SubscriptionStatus =
   | 'draft'
@@ -39,9 +37,33 @@ export type TransitionContext = {
 
 /** Returns an error string when the transition is invalid, null when valid. */
 export function validateTransition(ctx: TransitionContext): string | null {
-  // TODO(B): implement + make domain.spec.ts green.
-  // Rules: allowed by map above; pause requires plan.pausable; close (early) requires
-  // plan.closable; renew/reopen requires plan.renewable; confirm requires quotation
-  // not expired (D10). Quotation->Confirmed expiry check uses ctx.now ?? new Date().
-  throw new Error('NOT IMPLEMENTED (Dev B): validateTransition');
+  const allowed = SUBSCRIPTION_TRANSITIONS[ctx.from];
+  if (!allowed.includes(ctx.to)) {
+    return `Invalid transition: ${ctx.from} -> ${ctx.to}`;
+  }
+
+  switch (ctx.to) {
+    case 'paused':
+      if (!ctx.plan.pausable) return 'This plan cannot be paused';
+      break;
+    case 'closed':
+      // early close needs closable; auto-close by expiry is enforced by the
+      // billing job, not this transition — but a manual close is the same
+      // transition, so the flag rules.
+      if (!ctx.plan.closable) return 'This plan cannot be closed early';
+      break;
+    case 'active':
+      if (ctx.from === 'closed' && !ctx.plan.renewable) return 'This plan cannot be renewed';
+      break;
+    case 'confirmed':
+      if (ctx.from === 'quotation') {
+        const now = ctx.now ?? new Date();
+        if (!ctx.quotation_expires_at) return 'Quotation has no expiry date';
+        if (ctx.quotation_expires_at.getTime() <= now.getTime()) {
+          return 'Quotation has expired — renew or edit it first';
+        }
+      }
+      break;
+  }
+  return null;
 }
