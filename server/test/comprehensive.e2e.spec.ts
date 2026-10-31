@@ -428,3 +428,47 @@ describe('robustness and error-shape consistency', () => {
     expect(res.body.status).toBe('ok');
   });
 });
+
+// ── Customers CRUD (CUS-01/03) ──────────────────────────────────────────────
+
+describe('customers CRUD', () => {
+  it('staff creates a customer with a normalized email', async () => {
+    const res = await api().post('/customers').set('Authorization', `Bearer ${staffToken}`)
+      .send({ name: 'New Shop', email: '  NewShop@Full.TEST ', phone: '+91 91111 11111', billing_address: '1 Main St' });
+    expect(res.status).toBe(201);
+    expect(res.body.email).toBe('newshop@full.test');
+  });
+
+  it('rejects a duplicate email with a field error', async () => {
+    const res = await api().post('/customers').set('Authorization', `Bearer ${staffToken}`)
+      .send({ name: 'Dup', email: 'newshop@full.test' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.fields.email).toContain('Already in use');
+  });
+
+  it('detail aggregates subscriptions, invoices and outstanding (CUS-03)', async () => {
+    // a customer with a billed subscription
+    const cust = await prisma.customer.create({ data: { name: 'Agg Co', email: 'agg@full.test' } });
+    const subId = await mkActiveSub([{ product_id: productAId, quantity: 1 }], { customer_id: cust.id });
+    await runBilling(); // creates a confirmed 1180.00 invoice (18% tax, no discount)
+
+    const detail = await api().get(`/customers/${cust.id}`).set('Authorization', `Bearer ${staffToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.subscriptions.map((s: { id: number }) => s.id)).toContain(subId);
+    expect(detail.body.invoices).toHaveLength(1);
+    expect(detail.body.outstanding).toBe('1180.00');
+  });
+
+  it('lists with search across name/company/email', async () => {
+    const res = await api().get('/customers?search=agg').set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((c: { email: string }) => c.email)).toContain('agg@full.test');
+  });
+
+  it('blocks customers from managing customer records (§2.2)', async () => {
+    const custToken = (await api().post('/auth/login').send({ email: 'customer@full.test', password: 'CustPass1!' })).body.token;
+    const res = await api().post('/customers').set('Authorization', `Bearer ${custToken}`)
+      .send({ name: 'Nope', email: 'nope@full.test' });
+    expect(res.status).toBe(403);
+  });
+});

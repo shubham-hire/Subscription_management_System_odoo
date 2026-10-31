@@ -43,6 +43,20 @@ Errors: weak password / duplicate email → 400 with `fields.{password,email}`.
 
 Validation: plan `available_to > available_from` (PLN-06) · tax 0–100 (TAX-04) · discount pct 1–100, fixed > 0, dates ordered (DSC-06) · cost > sales price → 200 with warning field, not an error (PRD-04).
 
+## Customers (staff/admin — CUS-01/03)
+
+`GET /customers?search=&page=` → `{items,total,page,page_size}` (search across name/company/email) · `GET /customers/:id` · `POST /customers` · `PATCH /customers/:id`
+
+```json
+// POST/PATCH body: { name, email, company?, phone?, billing_address?, tax_id? }
+// email is trimmed+lowercased; duplicate → 409 CONFLICT with fields.email
+{ "id": 7, "name": "New Shop", "company": null, "email": "newshop@full.test", "phone": "+91 91111 11111",
+  "billingAddress": "1 Main St", "taxId": null,
+  "subscriptions": [ { "id": 3, "number": "SUB-000003", "status": "active", "startDate": "...", "expiryDate": "..." } ],
+  "invoices": [ { "id": 2, "number": "INV-000002", "status": "confirmed", "total": "1180.00", "amountPaid": "0.00" } ],
+  "outstanding": "1180.00" }
+```
+
 ## Invoices (staff/admin)
 
 | Endpoint | Notes |
