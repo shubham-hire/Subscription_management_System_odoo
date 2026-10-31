@@ -5,13 +5,16 @@ import { addPeriod } from '../domain/billing-dates';
 import { computeInvoiceTotals, computeLine } from '../domain/pricing';
 
 export interface BillingRunResult {
-  run_id: number;
+  status?: 'ok' | 'already_running';
+  run_id: number | null;
   created: number;
   skipped: number;
   failed: number;
   activated: number;
   auto_closed: number;
 }
+
+const LOCK_KEY = 'brightloop-billing-run';
 
 /** A discount rule resolved for this run, with its product scope. */
 interface DiscountRule {
@@ -70,6 +73,38 @@ export class BillingService {
    * transactions isolate failures.
    */
   async run(userId: number): Promise<BillingRunResult> {
+    // Advisory lock: two concurrent runs (nervous double-click, two staff,
+    // a future cron colliding with a manual run) must not double-work or
+    // double-increment discount counters. The DB constraint still guarantees
+    // no duplicates — this makes concurrent runs cheap and honest.
+    //
+    // Session-scoped locks are held per CONNECTION; Prisma pools them, so the
+    // lock + unlock must happen on the same session. Wrapping the run in one
+    // interactive transaction pins that session (and crash-safety comes free:
+    // a dead process drops the connection, releasing the lock). The run's own
+    // per-period transactions work fine alongside — the outer tx holds no
+    // table locks. Timeout raised above a worst-case full run (~1 min at 5k).
+    return this.prisma.$transaction(
+      async (lockTx) => {
+        const locked = await lockTx.$queryRaw<{ locked: boolean }[]>`
+          SELECT pg_try_advisory_lock(hashtext(${LOCK_KEY})) AS locked`;
+        if (!locked[0]?.locked) {
+          return {
+            status: 'already_running' as const,
+            run_id: null, created: 0, skipped: 0, failed: 0, activated: 0, auto_closed: 0,
+          };
+        }
+        try {
+          return await this.runLocked(userId);
+        } finally {
+          await lockTx.$queryRaw`SELECT pg_advisory_unlock(hashtext(${LOCK_KEY}))`;
+        }
+      },
+      { timeout: 180_000, maxWait: 10_000 },
+    );
+  }
+
+  private async runLocked(userId: number): Promise<BillingRunResult> {
     const today = startOfToday();
 
     // ── Housekeeping (D9), step 1: activate confirmed subs past start ──

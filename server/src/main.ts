@@ -8,6 +8,15 @@ import { MoneyFormatInterceptor } from './common/money-format.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Frontend (Vite :5173) calls this API cross-origin — without CORS the
+  // browser blocks every POST preflight. Origins are env-configurable so a
+  // deployed frontend can be added without code changes.
+  const config = app.get(ConfigService);
+  const origins = (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: origins });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );

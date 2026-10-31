@@ -1,58 +1,39 @@
-# B's Absorption Plan — Dev A takes the backend, ~4 hours
+# Hackathon-Readiness Plan — scoped to "nothing fails on stage"
 
 ## Context
 
-Dev B had to leave. Their workstream — domain pure functions, subscriptions lifecycle, the billing engine, and reports — is the only thing standing between the demo path and completion. Dev C continues 100% frontend against the **frozen contract** in `docs/api-contract.md` (they must not wait on you). You absorb all of B's backend solo. Decisions locked: ~4h left · billing-run invoices are created **Confirmed** directly (new decision **D18**) · pause/resume/renew, template flow, and forgot-password are **officially cut**.
+The goal is restated: **hackathon-ready product**, not a scalability project. The system-design review already lives in `docs/design/brightloop-sms.md` (committed, pushed) — its decisions table and scaling roadmap are the "we know how this scales" story for judges. The product itself needs only the fixes that can break the live demo. Everything P1/P2 from the scalability plan (cron, backups, rate limiting, revocation, keyset pagination, rollups, k6) is explicitly deferred and documented as future work — that deferral IS the design discipline the review endorsed.
 
-**Deliverable:** `Plan-B.md` (this plan, saved as a file) + the implementation executed live with me narrating, same style as the Dev A runbook.
+**Total: ~1.5 hours of code, then rehearsal.**
 
-## The 4-hour schedule (blocks in execution order)
+## Phase 1 — Three demo-blocking fixes (~1h, all in server/)
 
-**Block 1 (~40 min) — Domain functions, make B's 13 red tests green.**
-`server/src/domain/` — skeletons and exact specs already exist, tests in `domain.spec.ts` encode them:
-- `billing-dates.ts` `addPeriod(date, period)` — month-end clamp (Jan 31 → Feb 28/29 incl. leap), daily/weekly/monthly/yearly; no mutation.
-- `pricing.ts` `computeLine` / `computeInvoiceTotals` — decimal.js, string money, discount clamped at subtotal (DSC-07), tax exclusive (D14).
-- `transitions.ts` `validateTransition` — the §5.1 map + plan flags (`pausable`/`closable`/`renewable`) + quotation expiry (D10).
-Gate: `npm run test:domain` green before anything else.
+1. **CORS** (`server/src/main.ts`): `app.enableCors({ origin: ['http://localhost:5173'] })`, origin from `CORS_ORIGINS` env. Without this, C's browser app fails preflight on every POST — the single most likely on-stage failure.
+2. **Payment double-click lock** (`server/src/payments/payments.service.ts`): `SELECT … FOR UPDATE` on the invoice row inside the existing transaction, before the balance check. A double-clicked partial payment currently overpays; after this, the second request sees the updated outstanding and is rejected with the exact balance.
+3. **Billing double-run lock** (`server/src/billing/billing.service.ts`): `pg_try_advisory_lock` at the top of `run()`, unlock in `finally`; a concurrent run returns `{ status: 'already_running', … }`. The constraint already prevents duplicates — this makes the "run twice" demo scene deterministic under nervous clicking.
 
-**Block 2 (~45 min) — Subscriptions module** (`server/src/sales/`): `POST /subscriptions` (staff/admin), `GET /subscriptions` + `/:id` (staff/admin; customer-own via portal already done), `POST /subscriptions/:id/{confirm,activate,close}`.
-- Create: validate customer exists, plan within availability window (PLN-03), per-line: `unit_price = product.salesPrice + variant.priceExtra` (PRD-03, snapshot), quantity ≥ plan.min_quantity (D14), tax defaults `product.taxId`; `expiry = start + 1 period` via `addPeriod` (D3), `next_billing_date = start`, status `draft`, number via DB default.
-- Transitions: `validateTransition` from domain + write `subscription_status_history` row (user + timestamp, SUB-05) + update status. Invalid → 400 with the domain error string (acceptance #7).
-- Line edits only in draft/quotation (D13) — PATCH lines endpoint, guarded by status.
+**Tests** (extend `server/test/edge.e2e.spec.ts` or new `test/demo-hardening.e2e.spec.ts`): two parallel billing runs → exactly one creates; two parallel payments → exactly one succeeds; CORS preflight (`OPTIONS /auth/login` with Origin header → 204 + `Access-Control-Allow-Origin`).
 
-**Block 3 (~60 min) — Billing engine** (`server/src/billing/`): `POST /billing/run` (staff/admin) — demo scene 5.
-One service, per-subscription transactions (INV-04, §6.2):
-1. **Housekeeping** (D9): confirmed subs with `startDate ≤ today` → active; active subs on `auto_close` plans with `expiryDate ≤ today` → closed.
-2. **Billing loop**: active subs with `nextBillingDate ≤ today`; while true (catch-up for missed periods): build invoice lines from subscription lines; **auto-apply discounts** (§6.3/D1: rules active by date range, `times_used < max_uses`, min qty/purchase met, scope `product` via `discount_products` or `subscription`; best single rule per line by largest saving); compute via `computeLine`/`computeInvoiceTotals`; create invoice **status Confirmed (D18)**, `period_start = nextBillingDate`, number via DB default; increment `times_used` in the same transaction; `nextBillingDate = addPeriod(nextBillingDate, plan.billingPeriod)`.
-3. **Idempotency**: unique `(subscription_id, period_start)` → on conflict skip (acceptance #8: run twice → 0 created). Failures don't block the loop (per-sub transaction); count into summary.
-4. Record `billing_runs` row + return `{created, skipped, failed, run_id}`.
+## Phase 2 — Demo polish (~20 min)
 
-**Block 4 (~30 min) — Reports** (`server/src/reports/`): `GET /reports/summary` (active subs count, revenue collected = Σ`amountPaid`, outstanding = Σ(`total`−`amountPaid`) where confirmed, overdue count + amount) and `GET /reports/overdue` (confirmed, balance>0, due<today, ordered by dueDate, with customer contact + days overdue — RPT-04). DB aggregates only (§9.1); admin+staff roles.
+4. **Seed bump to 5,000 subs** (optional but recommended): `SCALE=5000 npx ts-node prisma/seed-scale.ts` — the constants already read cleanly; makes the PRD's "5,000+ subscriptions < 2s" claim literal for scene 7. Verify endpoint timings stay well under 2s (currently ~15ms at 800 invoices).
+5. **README judge section**: add a short "System design & scaling" paragraph pointing to `docs/design/brightloop-sms.md` (decisions table + roadmap) and the test counts. Judges read the README first.
+6. **`BUSINESS_TZ` note only** — skipped as code (demo machine is IST; local-midnight logic is correct there); recorded as the first roadmap item in the design doc.
 
-**Block 5 (~40 min) — Tests + demo-path verification**
-- Extend `test/api.e2e.spec.ts` (or new `test/billing.e2e.spec.ts`): variant pricing +560 (acceptance #4), invalid transition rejected + history written (#7), billing run twice → 0 created (#8), catch-up bills missed periods once, discount auto-applies and stops at limit (#9).
-- Full walkthrough on dev DB: create sub → confirm → activate → run billing → pay (mirrors scenes 4–6).
-- `npm run test:all` green.
+## Phase 3 — Rehearsal gate (~30 min)
 
-**Final 25 min — buffer** for C's integration questions.
-
-## Coordination with C (do this first — 2 min)
-
-Send now: *"Re-plan: B's out, A absorbs backend. Contract in docs/api-contract.md is unchanged and still the truth. Your order: (1) subscription create flow + lifecycle buttons [shapes in contract §Owned by Dev B], (2) Run-billing button → shows `{created,skipped,failed}`, (3) dashboard → GET /reports/summary + /reports/overdue, (4) portal pages [endpoints live]. Invoices from billing arrive Confirmed — no confirm button needed. I'll ping when /subscriptions and /billing/run are live."*
-
-Also: B's `domain/README.md` and the 13 red tests stay — they're now your spec; update `Plan.md` roles table only if time permits.
-
-## Key reuse (no re-implementing)
-
-- `server/src/domain/` stubs + tests — the spec, not just helpers
-- `common/money.ts`, `common/validation.ts` (`IsMoneyString`), `common/prisma.service.ts`, error filter — same DTO patterns as `catalog.dto.ts`/`payment.dto.ts`
-- Schema already has: unique `(subscription_id, period_start)`, sequences, status-history table, `billing_runs`, indexes — **no migrations needed**
-- Payments module consumes billing's Confirmed invoices unchanged
+7. Full suites green: `npm test` (36) + `test:domain` (46) + `test:integration` (69+).
+8. Fresh-DB drill: `docker compose down -v && up -d` → migrate → seed → scale-seed → demo-path curl walkthrough (scenes 4–6).
+9. `nest build` + `vite build` clean; commit + push (2 commits).
 
 ## Verification
 
-1. `npm run test:domain` → 13/13 green (Block 1 gate)
-2. `npm run test:integration` → existing 26 + new billing/subscriptions specs green
-3. `npm run test:all` green; `nest build` clean
-4. Demo-path walkthrough on dev DB (scenes 4–6 end-to-end)
-5. Acceptance #4, #7, #8, #9 explicitly asserted by tests
+- Preflight check: `curl -s -X OPTIONS http://localhost:4000/auth/login -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: POST"` → 204 with allow-origin header.
+- Parallel-run test output: exactly one `created > 0`, other `already_running`.
+- Parallel-payment test output: exactly one 201.
+- Timed dashboard/report/list curls at 5k seed: all < 2s (expect < 100ms).
+- All suites green, builds clean, pushed to `origin/main`.
+
+## Explicitly out of scope (documented as the roadmap in the design doc)
+
+Cron billing, backups, rate limiting, token revocation, statement timeout, audit expansion, keyset pagination, rollup tables, k6 — each with its numeric trigger already written down. If judges ask "how does this scale," the answer is the design doc, not more code.

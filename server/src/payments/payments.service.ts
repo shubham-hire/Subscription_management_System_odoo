@@ -34,6 +34,11 @@ export class PaymentsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Serialize concurrent payers on this invoice: two simultaneous
+      // requests must see each other's amount, or both could pass the
+      // balance check and overpay.
+      await tx.$queryRaw`SELECT id FROM "invoices" WHERE id = ${invoiceId} FOR UPDATE`;
+
       const invoice = await tx.invoice.findUnique({ where: { id: invoiceId } });
       if (!invoice) throw new NotFoundException('Invoice not found');
 
