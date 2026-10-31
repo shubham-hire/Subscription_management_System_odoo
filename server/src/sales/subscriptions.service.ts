@@ -112,7 +112,7 @@ export class SubscriptionsService {
           });
         }
         let variantExtra = new Prisma.Decimal(0);
-        if (line.variant_id !== undefined) {
+        if (line.variant_id !== undefined && line.variant_id !== null) {
           const variant = product.variants.find((v) => v.id === line.variant_id);
           if (!variant || variant.productId !== product.id) {
             throw new BadRequestException({
