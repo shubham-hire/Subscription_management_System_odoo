@@ -34,7 +34,10 @@ export class PortalService {
 
   listInvoices(customerId: number, status?: InvoiceStatus) {
     return this.prisma.invoice.findMany({
-      where: { customerId, ...(status ? { status } : {}) },
+      where: {
+        customerId,
+        ...(status ? { status } : { status: { not: InvoiceStatus.draft } }),
+      },
       include: { lines: true },
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     }).then((rows) => rows.map((inv) => ({ ...inv, overdue: isOverdue(inv) })));
@@ -42,7 +45,7 @@ export class PortalService {
 
   async getInvoice(customerId: number, id: number) {
     const inv = await this.prisma.invoice.findFirst({
-      where: { id, customerId },
+      where: { id, customerId, status: { not: InvoiceStatus.draft } },
       include: { lines: true, payments: true },
     });
     if (!inv) throw new NotFoundException('Invoice not found');

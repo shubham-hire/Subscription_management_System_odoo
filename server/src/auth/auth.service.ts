@@ -74,8 +74,10 @@ export class AuthService {
 
   private async issueToken(id: number, role: 'admin' | 'staff' | 'customer', customerId: number | null) {
     const payload: JwtPayload = { sub: id, role, customerId };
+    const token = await this.jwt.signAsync(payload, { expiresIn: '24h' });
     return {
-      token: await this.jwt.signAsync(payload, { expiresIn: '24h' }),
+      token,
+      access_token: token,
       user: { id, role, customerId },
     };
   }
