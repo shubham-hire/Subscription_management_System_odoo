@@ -61,7 +61,9 @@ export function Dialog({
     onClose();
   };
 
-  if (!visible) return null;
+  // Mount when open flips true so the ref populates and showModal can run —
+  // gating on visible alone deadlocked every closed-to-open transition.
+  if (!visible && !open) return null;
 
   return (
     <dialog

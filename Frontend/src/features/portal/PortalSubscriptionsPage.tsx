@@ -63,7 +63,7 @@ export function PortalSubscriptionsPage() {
               />
             )}
 
-            {!isLoading && !isError && data?.items.length === 0 && (
+            {!isLoading && !isError && data && data.items.length === 0 && (
               <TableEmpty
                 columns={7}
                 title="No active subscriptions found"

@@ -162,7 +162,7 @@ export function TaxesPage() {
             />
           )}
 
-          {!isLoading && !isError && data?.items.length === 0 && (
+          {!isLoading && !isError && data && data.items.length === 0 && (
             <TableEmpty columns={6} message="No tax rules configured. Click 'Add Tax Rate' to create one." />
           )}
 

@@ -171,7 +171,7 @@ export function ProductsPage() {
             />
           )}
 
-          {!isLoading && !isError && data?.items.length === 0 && (
+          {!isLoading && !isError && data && data.items.length === 0 && (
             <TableEmpty columns={5} message="No products created yet. Click 'Add Product' to start." />
           )}
 

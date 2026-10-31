@@ -7,7 +7,16 @@
     <title>Brightloop — Subscription Management</title>
   </head>
   <body class="bg-gray-50 text-gray-900 antialiased">
-    <div id="root"></div>
+    <script>
+    window.__errs = [];
+    window.addEventListener('error', function (e) {
+      window.__errs.push(String((e.error && e.error.stack) || e.message).slice(0, 600));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      window.__errs.push('REJ: ' + String(e.reason && e.reason.stack ? e.reason.stack : e.reason).slice(0, 600));
+    });
+  </script>
+  <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

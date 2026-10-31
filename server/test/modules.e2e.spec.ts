@@ -338,7 +338,7 @@ describe('list includes and wire details', () => {
     const confirmed = await mkConfirmedInvoice(sub.id, customerId, 'INV-970009');
 
     const list = await api().get('/portal/invoices').set('Authorization', `Bearer ${customerToken}`);
-    const numbers = list.body.map((i: { number: string }) => i.number);
+    const numbers = list.body.items.map((i: { number: string }) => i.number);
     expect(numbers).toContain('INV-970009');
     expect(numbers).not.toContain('INV-970008');
 

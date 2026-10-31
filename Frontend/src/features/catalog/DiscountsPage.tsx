@@ -180,7 +180,7 @@ export function DiscountsPage() {
             />
           )}
 
-          {!isLoading && !isError && data?.items.length === 0 && (
+          {!isLoading && !isError && data && data.items.length === 0 && (
             <TableEmpty columns={7} message="No discounts created yet. Click 'Add Discount' to start." />
           )}
 

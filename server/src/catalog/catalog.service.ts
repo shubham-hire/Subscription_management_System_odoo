@@ -170,7 +170,11 @@ export class CatalogService {
   // ── Taxes (TAX-01..04) ─────────────────────────────────────────────────────
 
   async listTaxes() {
-    return this.prisma.tax.findMany({ orderBy: { id: 'asc' } });
+    // Paginated envelope to match the contract (PaginatedResponse<Tax>)
+    return this.prisma.$transaction([
+      this.prisma.tax.findMany({ orderBy: { id: 'asc' } }),
+      this.prisma.tax.count(),
+    ]).then(([items, total]) => ({ items, total, page: 1, page_size: total || 20 }));
   }
 
   async createTax(dto: TaxDto) {
@@ -195,7 +199,11 @@ export class CatalogService {
   // ── Discounts (DSC-01..08, auto-applied at billing — D1) ──────────────────
 
   async listDiscounts() {
-    return this.prisma.discount.findMany({ include: { products: true }, orderBy: { id: 'asc' } });
+    // Paginated envelope to match the contract (PaginatedResponse<Discount>)
+    return this.prisma.$transaction([
+      this.prisma.discount.findMany({ include: { products: true }, orderBy: { id: 'asc' } }),
+      this.prisma.discount.count(),
+    ]).then(([items, total]) => ({ items, total, page: 1, page_size: total || 20 }));
   }
 
   async createDiscount(dto: DiscountDto) {

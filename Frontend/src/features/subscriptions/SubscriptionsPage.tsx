@@ -158,7 +158,7 @@ export function SubscriptionsPage() {
               />
             )}
 
-            {!isLoading && !isError && data?.items.length === 0 && (
+            {!isLoading && !isError && data && data.items.length === 0 && (
               <TableEmpty
                 columns={8}
                 title={

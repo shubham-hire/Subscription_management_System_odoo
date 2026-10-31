@@ -437,12 +437,12 @@ describe('portal', () => {
     const subs = await request(app.getHttpServer())
       .get('/portal/subscriptions').set('Authorization', `Bearer ${portalToken}`);
     expect(subs.status).toBe(200);
-    for (const s of subs.body) expect(s.customerId).toBe(customer1Id);
+    for (const s of subs.body.items) expect(s.customerId).toBe(customer1Id);
 
     const invs = await request(app.getHttpServer())
       .get('/portal/invoices').set('Authorization', `Bearer ${portalToken}`);
     expect(invs.status).toBe(200);
-    for (const i of invs.body) expect(i.customerId).toBe(customer1Id);
+    for (const i of invs.body.items) expect(i.customerId).toBe(customer1Id);
   });
 
   it('404s foreign IDs — never leaks data (POR-05, acceptance #3)', async () => {

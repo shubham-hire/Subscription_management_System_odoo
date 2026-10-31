@@ -194,7 +194,7 @@ export function InvoicesPage() {
               />
             )}
 
-            {!isLoading && !isError && data?.items.length === 0 && (
+            {!isLoading && !isError && data && data.items.length === 0 && (
               <TableEmpty
                 columns={9}
                 title={

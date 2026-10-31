@@ -68,7 +68,7 @@ export function PortalInvoicesPage() {
               />
             )}
 
-            {!isLoading && !isError && data?.items.length === 0 && (
+            {!isLoading && !isError && data && data.items.length === 0 && (
               <TableEmpty
                 columns={7}
                 title="No invoices found"

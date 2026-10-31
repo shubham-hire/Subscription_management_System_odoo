@@ -11,12 +11,18 @@ import { isOverdue, startOfToday } from '../payments/payments.service';
 export class PortalService {
   constructor(private prisma: PrismaService) {}
 
-  listSubscriptions(customerId: number) {
-    return this.prisma.subscription.findMany({
-      where: { customerId },
-      include: { plan: true, lines: { include: { product: { select: { name: true, type: true } } } } },
-      orderBy: { id: 'desc' },
-    });
+  async listSubscriptions(customerId: number, page = 1, pageSize = 20) {
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.subscription.findMany({
+        where: { customerId },
+        include: { plan: true, lines: { include: { product: { select: { name: true, type: true } } } } },
+        orderBy: { id: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: Math.min(pageSize, 100),
+      }),
+      this.prisma.subscription.count({ where: { customerId } }),
+    ]);
+    return { items, total, page, page_size: pageSize };
   }
 
   async getSubscription(customerId: number, id: number) {
@@ -32,15 +38,27 @@ export class PortalService {
     return sub;
   }
 
-  listInvoices(customerId: number, status?: InvoiceStatus) {
-    return this.prisma.invoice.findMany({
-      where: {
-        customerId,
-        ...(status ? { status } : { status: { not: InvoiceStatus.draft } }),
-      },
-      include: { lines: true },
-      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
-    }).then((rows) => rows.map((inv) => ({ ...inv, overdue: isOverdue(inv) })));
+  async listInvoices(customerId: number, status?: InvoiceStatus, page = 1, pageSize = 20) {
+    const where: Prisma.InvoiceWhereInput = {
+      customerId,
+      ...(status ? { status } : { status: { not: InvoiceStatus.draft } }),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: { lines: true },
+        orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+        skip: (page - 1) * pageSize,
+        take: Math.min(pageSize, 100),
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+    return {
+      items: rows.map((inv) => ({ ...inv, overdue: isOverdue(inv) })),
+      total,
+      page,
+      page_size: pageSize,
+    };
   }
 
   async getInvoice(customerId: number, id: number) {

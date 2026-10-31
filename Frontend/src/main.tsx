@@ -15,7 +15,23 @@ const queryClient = new QueryClient({
   },
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// Dev diagnostics: capture uncaught render errors (invisible otherwise).
+ReactDOM.createRoot(document.getElementById('root')!, {
+  onUncaughtError: (error: unknown, info?: { componentStack?: string }) => {
+    try {
+      const arr = JSON.parse(sessionStorage.getItem('__renderErrs') || '[]');
+      arr.push(
+        String((error as Error)?.message ?? error).slice(0, 300) +
+          ' :: ' +
+          String(info?.componentStack ?? '')
+            .split('\n')
+            .slice(0, 8)
+            .join(' | '),
+      );
+      sessionStorage.setItem('__renderErrs', JSON.stringify(arr.slice(-5)));
+    } catch { /* ignore */ }
+  },
+} as never).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>

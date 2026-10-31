@@ -192,7 +192,7 @@ export function CustomersPage() {
               />
             )}
 
-            {!isLoading && !isError && data?.items.length === 0 && (
+            {!isLoading && !isError && data && data.items.length === 0 && (
               <TableEmpty
                 columns={6}
                 title={search ? 'No matching customers found' : 'No customers yet'}

@@ -122,6 +122,18 @@ export function SubscriptionDetailModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {subscription.status === 'draft' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={transitionMutation.isPending}
+                onClick={() => handleAction('quotation')}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Send Quotation
+              </Button>
+            )}
+
             {subscription.status === 'quotation' && (
               <Button
                 variant="primary"
