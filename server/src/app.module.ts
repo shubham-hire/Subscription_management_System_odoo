@@ -8,9 +8,10 @@ import { RolesGuard } from './common/roles.guard';
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { PortalModule } from './portal/portal.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CatalogModule, InvoicesModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CatalogModule, InvoicesModule, PortalModule],
   controllers: [AppController],
   providers: [
     // Order matters: JwtAuthGuard authenticates (req.user), RolesGuard authorizes
