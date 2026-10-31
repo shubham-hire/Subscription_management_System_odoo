@@ -6,9 +6,10 @@ import { PrismaModule } from './common/prisma.module';
 import { JwtAuthGuard } from './common/jwt.guard';
 import { RolesGuard } from './common/roles.guard';
 import { AuthModule } from './auth/auth.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CatalogModule],
   controllers: [AppController],
   providers: [
     // Order matters: JwtAuthGuard authenticates (req.user), RolesGuard authorizes
