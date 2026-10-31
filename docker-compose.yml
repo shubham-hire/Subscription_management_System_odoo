@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: brightloop-db
+    environment:
+      POSTGRES_USER: brightloop
+      POSTGRES_PASSWORD: brightloop
+      POSTGRES_DB: brightloop
+    ports:
+      - "5432:5432"
+    volumes:
+      - brightloop_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brightloop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Dev email catcher (stretch: forgot-password). Uncomment when needed.
+  # mailpit:
+  #   image: axllent/mailpit:latest
+  #   container_name: brightloop-mailpit
+  #   ports:
+  #     - "1025:1025"   # SMTP
+  #     - "8025:8025"   # Web UI
+
+volumes:
+  brightloop_pgdata:
