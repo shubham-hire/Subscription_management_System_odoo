@@ -21,6 +21,8 @@ interface DiscountRule {
   value: Prisma.Decimal;
   minQuantity: number;
   minPurchase: Prisma.Decimal;
+  maxUses: number;
+  baseTimesUsed: number;
   scope: 'product' | 'subscription';
   productIds: Set<number>;
 }
@@ -44,6 +46,14 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+/** D15: "today or earlier" in the server's timezone — date-only values stored
+ * as UTC midnight must still count as due during the local day. */
+function startOfTomorrow(): Date {
+  const t = startOfToday();
+  t.setDate(t.getDate() + 1);
+  return t;
+}
+
 function minOf(a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal {
   return a.lt(b) ? a : b;
 }
@@ -63,14 +73,14 @@ export class BillingService {
 
     // ── Housekeeping (D9): activate confirmed past start, auto-close expired ──
     const activated = await this.prisma.subscription.updateMany({
-      where: { status: SubscriptionStatus.confirmed, startDate: { lte: today } },
+      where: { status: SubscriptionStatus.confirmed, startDate: { lt: startOfTomorrow() } },
       data: { status: SubscriptionStatus.active },
     });
 
     const expired = await this.prisma.subscription.findMany({
       where: {
         status: { in: [SubscriptionStatus.active, SubscriptionStatus.paused] },
-        expiryDate: { lte: today },
+        expiryDate: { lt: startOfTomorrow() },
         plan: { autoClose: true },
       },
       select: { id: true },
@@ -98,7 +108,7 @@ export class BillingService {
     const due = await this.prisma.subscription.findMany({
       where: {
         status: SubscriptionStatus.active,
-        nextBillingDate: { lte: today },
+        nextBillingDate: { lt: startOfTomorrow() },
       },
       include: {
         plan: true,
@@ -107,13 +117,16 @@ export class BillingService {
     });
 
     const rules = await this.activeDiscountRules(today);
+    const usageState = new Map<number, number>(); // ruleId → applications this run (max_uses enforcement)
     let created = 0;
     let skipped = 0;
     let failed = 0;
 
     for (const sub of due) {
       try {
-        const result = await this.prisma.$transaction((tx) => this.billSubscription(tx, sub, rules, today));
+        const result = await this.prisma.$transaction((tx) =>
+          this.billSubscription(tx, sub, rules, usageState, today),
+        );
         created += result.created;
         skipped += result.skipped;
       } catch (err) {
@@ -135,14 +148,13 @@ export class BillingService {
     return { run_id: run.id, created, skipped, failed, activated: activated.count, auto_closed: autoClosed };
   }
 
-  /** Rules active today and under their usage limit (§6.3). */
+  /** Rules active today (usage limits enforced in pickDiscount against run-scoped state). */
   private async activeDiscountRules(today: Date): Promise<DiscountRule[]> {
     const rules = await this.prisma.discount.findMany({
       where: {
         isActive: true,
         startDate: { lte: today },
         endDate: { gte: today },
-        OR: [{ maxUses: 0 }, { timesUsed: { lt: this.prisma.discount.fields.maxUses } }],
       },
       include: { products: { select: { productId: true } } },
     });
@@ -153,6 +165,8 @@ export class BillingService {
       value: r.value,
       minQuantity: r.minQuantity,
       minPurchase: r.minPurchase,
+      maxUses: r.maxUses,
+      baseTimesUsed: r.timesUsed,
       scope: r.scope,
       productIds: new Set(r.products.map((p) => p.productId)),
     }));
@@ -166,6 +180,7 @@ export class BillingService {
     tx: Prisma.TransactionClient,
     sub: SubWithLines,
     rules: DiscountRule[],
+    usageState: Map<number, number>,
     today: Date,
   ): Promise<{ created: number; skipped: number }> {
     let nextBilling: Date = sub.nextBillingDate;
@@ -173,7 +188,7 @@ export class BillingService {
     let skipped = 0;
     let guard = 0; // hard stop against a pathological schedule
 
-    while (nextBilling <= today && guard++ < 100) {
+    while (nextBilling < startOfTomorrow() && guard++ < 100) {
       const periodStart = new Date(nextBilling);
       const periodEnd = addPeriod(periodStart, sub.plan.billingPeriod);
 
@@ -184,7 +199,7 @@ export class BillingService {
       );
       const usedRules = new Map<number, number>();
       const computed: ComputedLine[] = sub.lines.map((line) => {
-        const best = this.pickDiscount(rules, line, lineSubtotalOf(line), subscriptionSubtotal, usedRules);
+        const best = this.pickDiscount(rules, line, lineSubtotalOf(line), subscriptionSubtotal, usedRules, usageState);
         const result = computeLine({
           unit_price: line.unitPrice.toString(),
           quantity: line.quantity,
@@ -265,6 +280,7 @@ export class BillingService {
     lineSubtotal: Prisma.Decimal,
     subscriptionSubtotal: Prisma.Decimal,
     usedRules: Map<number, number>,
+    usageState: Map<number, number>,
   ): { rule: DiscountRule; amount: Prisma.Decimal } | null {
     let best: { rule: DiscountRule; amount: Prisma.Decimal } | null = null;
 
@@ -273,6 +289,8 @@ export class BillingService {
       const purchaseBase = rule.scope === 'subscription' ? subscriptionSubtotal : lineSubtotal;
       if (rule.minPurchase.gt(purchaseBase)) continue;
       if (rule.scope === 'product' && !rule.productIds.has(line.productId)) continue;
+      // DSC-05: usage limit — DB counter plus everything applied earlier in this run
+      if (rule.maxUses > 0 && rule.baseTimesUsed + (usageState.get(rule.id) ?? 0) >= rule.maxUses) continue;
 
       const amount =
         rule.type === 'fixed'
@@ -282,7 +300,10 @@ export class BillingService {
       if (!best || amount.gt(best.amount)) best = { rule, amount };
     }
 
-    if (best) usedRules.set(best.rule.id, (usedRules.get(best.rule.id) ?? 0) + 1);
+    if (best) {
+      usedRules.set(best.rule.id, (usedRules.get(best.rule.id) ?? 0) + 1);
+      usageState.set(best.rule.id, (usageState.get(best.rule.id) ?? 0) + 1);
+    }
     return best;
   }
 }

@@ -163,9 +163,14 @@ export class SubscriptionsService {
   /** SUB-05/10: validate via the domain state machine, write history, persist. */
   async transition(id: number, to: SubscriptionStatus, userId: number) {
     return this.prisma.$transaction(async (tx) => {
-      const sub = await tx.subscription.findUnique({ where: { id }, include: { plan: true } });
+      const sub = await tx.subscription.findUnique({
+        where: { id },
+        include: { plan: true, history: { where: { toStatus: 'quotation' }, orderBy: { changedAt: 'desc' }, take: 1 } },
+      });
       if (!sub) throw new NotFoundException('Subscription not found');
 
+      // D10: quotation validity = 30 days from when it entered Quotation state
+      const quotationIssuedAt = sub.history[0]?.changedAt;
       const error = validateTransition({
         from: sub.status,
         to,
@@ -175,8 +180,10 @@ export class SubscriptionsService {
           renewable: sub.plan.renewable,
           auto_close: sub.plan.autoClose,
         },
-        // D10: quotation expiry — quotations created without a template get 30 days
-        quotation_expires_at: sub.status === 'quotation' ? new Date(sub.startDate.getTime() + 30 * 86_400_000) : undefined,
+        quotation_expires_at:
+          sub.status === 'quotation' && quotationIssuedAt
+            ? new Date(quotationIssuedAt.getTime() + 30 * 86_400_000)
+            : undefined,
       });
       if (error) {
         throw new BadRequestException({ code: 'VALIDATION_ERROR', message: error, fields: { transition: error } });
