@@ -114,9 +114,71 @@ async function main() {
     create: { discountId: 1, productId: product.id },
   });
 
+  // ── Demo fixture: one Active subscription + one Confirmed invoice ──
+  // Lets payments/overdue be demoed before Dev B's billing run is wired;
+  // the billing run supersedes it for everything else. Order-proof: if the
+  // scale seed ran first and claimed SUB-000001, we reuse and never fail.
+  const claimedSub = await prisma.subscription.findUnique({ where: { number: 'SUB-000001' } });
+  const fixtureSub =
+    claimedSub && claimedSub.customerId === shopCustomer.id
+      ? claimedSub
+      : claimedSub
+        ? null // scale seed owns this number now — skip fixture quietly
+        : await prisma.subscription.create({
+            data: {
+              number: 'SUB-000001',
+              customerId: shopCustomer.id,
+              planId: 1,
+              status: 'active',
+              startDate: daysFromNow(-30),
+              expiryDate: daysFromNow(1),
+              nextBillingDate: daysFromNow(-1),
+              paymentTermsDays: 15,
+              createdBy: staff.id,
+            },
+          });
+
+  const claimedInvoice = await prisma.invoice.findUnique({ where: { number: 'INV-000001' } });
+  if (fixtureSub && !claimedInvoice) {
+    const invoice = await prisma.invoice.create({
+      data: {
+        number: 'INV-000001',
+        subscriptionId: fixtureSub.id,
+        customerId: shopCustomer.id,
+        status: 'confirmed',
+        periodStart: daysFromNow(-30),
+        periodEnd: daysFromNow(1),
+        issueDate: daysFromNow(-30),
+        dueDate: daysFromNow(-15), // past due → shows in overdue views
+        subtotal: 3559,
+        discountTotal: 355.9,
+        taxTotal: 576.56,
+        total: 3779.66,
+        amountPaid: 0,
+      },
+    });
+    await prisma.invoiceLine.create({
+      data: {
+        invoiceId: invoice.id,
+        productId: product.id,
+        description: 'ERP Software (Odoo)',
+        quantity: 2,
+        unitPrice: 3559,
+        discountAmount: 355.9,
+        discountName: 'Bulk seats 10%',
+        taxAmount: 576.56,
+        lineTotal: 3779.66,
+      },
+    });
+  }
+  // Sequences: DB-default inserts (scale seed, billing run) continue after 000001.
+  await prisma.$executeRawUnsafe(`SELECT setval('subscription_number_seq', 1, true)`);
+  await prisma.$executeRawUnsafe(`SELECT setval('invoice_number_seq', 1, true)`);
+
   console.log('Seed v1 complete:');
   console.log(`  users: ${admin.email}, ${staff.email}, ${shopCustomer.email} — password "${PASSWORD}"`);
   console.log(`  catalog: ${product.name} (+ Odoo variant ₹${odooVariant.priceExtra}), GST 18%, Business Monthly plan, "Bulk seats 10%"`);
+  console.log(fixtureSub && !claimedInvoice ? '  fixture: SUB-000001 (active) + INV-000001 (confirmed, overdue)' : '  fixture: SUB-000001/INV-000001 already present (scale seed ran first) — reused');
 }
 
 main()

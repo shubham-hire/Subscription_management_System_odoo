@@ -52,5 +52,5 @@ npm run dev                # http://localhost:5173
 
 ```bash
 docker compose down -v && docker compose up -d
-cd server && npx prisma migrate dev && npx prisma db seed
+cd server && npx prisma migrate deploy && npx prisma db seed && npx ts-node prisma/seed-scale.ts
 ```
