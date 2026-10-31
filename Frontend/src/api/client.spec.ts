@@ -100,7 +100,7 @@ describe('apiClient — contract error envelope', () => {
       jsonBody: { error: { code: 'VALIDATION_ERROR', message: 'Validation failed', fields: { email: 'Already in use' } } },
     });
 
-    const err = await apiClient('/auth/signup', { method: 'POST', body: '{}' }).catch((e) => e);
+    const err = (await apiClient('/auth/signup', { method: 'POST', body: '{}' }).catch((e) => e)) as ApiError;
     expect(err).toBeInstanceOf(ApiErrorClass);
     expect(err.status).toBe(400);
     expect(err.code).toBe('VALIDATION_ERROR');
