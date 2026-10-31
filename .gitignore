@@ -4,6 +4,10 @@ build/
 *.log
 .DS_Store
 coverage/
+.env
 .env.local
+.env.*.local
+!.env.example
 prisma/migrations/dev/
 *.tsbuildinfo
+.vite/
