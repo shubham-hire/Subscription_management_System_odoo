@@ -47,7 +47,7 @@ npm run dev                # http://localhost:5173
 
 This is a modular monolith (NestJS + PostgreSQL) chosen deliberately: at 3 devs and 5k subscriptions, one deployable with DB-enforced invariants beats microservices. The full reasoning — decisions table, failure stress-test, scaling-ladder position, and the numbered roadmap (what we build when load actually demands it) — lives in [docs/design/brightloop-sms.md](docs/design/brightloop-sms.md).
 
-**Measured at 5,000+ subscriptions / 8,000+ invoices:** dashboard summary 25ms · overdue report 149ms · list endpoints < 25ms — an order of magnitude inside the PRD's 2-second target. Verified by 210 automated tests (unit + domain + integration + frontend client), including concurrency edge cases (parallel billing runs, double-clicked payments).
+**Measured at 5,000+ subscriptions / 8,000+ invoices:** dashboard summary 25ms · overdue report 149ms · list endpoints < 25ms — an order of magnitude inside the PRD's 2-second target. Verified by 255 automated tests (unit + domain + integration + frontend), including concurrency edge cases (parallel billing runs, double-clicked payments) and the newer admin/portal modules.
 
 ## Docs
 
@@ -67,7 +67,8 @@ npm run test:integration # Supertest suites (94) — real API vs disposable brig
                          #   incl. edge cases: input normalization, token expiry, validation bounds,
                          #   lifecycle boundaries, discount caps, auto-close ordering, crash recovery
 npm run test:all         # everything
-cd ../Frontend && npm test  # frontend API-client contract tests (11)
+cd ../Frontend && npm test  # frontend unit + client tests (40): money, dates (incl. the
+                         #   ISO-timestamp formatDate regression), zod schemas, API client
 ```
 
 Integration tests boot the real Nest app (guards, pipes, filters, interceptor) against
