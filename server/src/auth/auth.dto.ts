@@ -1,12 +1,17 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
-export class SignupDto {
+/** Emails are normalized before validation: trimmed and lowercased (§9.3). */
+export class EmailDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @IsEmail({}, { message: 'email must be a valid email' })
+  email!: string;
+}
+
+export class SignupDto extends EmailDto {
   @IsString()
   @IsNotEmpty({ message: 'name is required' })
   name!: string;
-
-  @IsEmail({}, { message: 'email must be a valid email' })
-  email!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'password is required' })
@@ -14,10 +19,7 @@ export class SignupDto {
   password!: string;
 }
 
-export class LoginDto {
-  @IsEmail({}, { message: 'email must be a valid email' })
-  email!: string;
-
+export class LoginDto extends EmailDto {
   @IsString()
   @IsNotEmpty({ message: 'password is required' })
   @MaxLength(200)

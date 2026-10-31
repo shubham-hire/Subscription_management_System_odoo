@@ -79,11 +79,11 @@ beforeAll(async () => {
   await prisma.customer.deleteMany();
 
   // ── Fixtures ──
-  await prisma.user.createMany({
-    data: [
-      { name: admin.name, email: admin.email, passwordHash: await bcrypt.hash(admin.password, 4), role: 'admin' },
-      { name: staff.name, email: staff.email, passwordHash: await bcrypt.hash(staff.password, 4), role: 'staff' },
-    ],
+  const staffUser = await prisma.user.create({
+    data: { name: staff.name, email: staff.email, passwordHash: await bcrypt.hash(staff.password, 4), role: 'staff' },
+  });
+  await prisma.user.create({
+    data: { name: admin.name, email: admin.email, passwordHash: await bcrypt.hash(admin.password, 4), role: 'admin' },
   });
 
   const c1 = await prisma.customer.create({
@@ -123,7 +123,7 @@ beforeAll(async () => {
       data: {
         number, customerId, planId: plan.id, status: 'active',
         startDate: new Date(Date.now() - 30 * 86_400_000), expiryDate: new Date(Date.now() + 1 * 86_400_000),
-        nextBillingDate: new Date(), paymentTermsDays: 15, createdBy: 2,
+        nextBillingDate: new Date(), paymentTermsDays: 15, createdBy: staffUser.id,
       },
     });
   const a = await mkSub(customer1Id, 'SUB-900001');

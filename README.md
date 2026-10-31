@@ -53,8 +53,10 @@ npm run dev                # http://localhost:5173
 ```bash
 cd server
 npm test                 # unit (36) — money format, validation, password rules, overdue logic
-npm run test:domain      # Dev B's pure billing/state-machine tests (red until implemented)
-npm run test:integration # Supertest suite (26) — real API vs disposable brightloop_test DB
+npm run test:domain      # pure billing/state-machine tests (46) — calendar edges, rounding, transitions
+npm run test:integration # Supertest suites (69) — real API vs disposable brightloop_test DB,
+                         #   incl. edge cases: input normalization, token expiry, validation bounds,
+                         #   lifecycle boundaries, discount caps, auto-close ordering, crash recovery
 npm run test:all         # everything
 ```
 

@@ -39,6 +39,7 @@ type SubLine = SubWithLines['lines'][number];
 interface ComputedLine {
   result: ReturnType<typeof computeLine>;
   discountName: string | null;
+  ruleId: number | null;
 }
 
 function startOfToday(): Date {
@@ -71,12 +72,44 @@ export class BillingService {
   async run(userId: number): Promise<BillingRunResult> {
     const today = startOfToday();
 
-    // ── Housekeeping (D9): activate confirmed past start, auto-close expired ──
+    // ── Housekeeping (D9), step 1: activate confirmed subs past start ──
     const activated = await this.prisma.subscription.updateMany({
       where: { status: SubscriptionStatus.confirmed, startDate: { lt: startOfTomorrow() } },
       data: { status: SubscriptionStatus.active },
     });
 
+    // ── Billing loop: Active subscriptions due today or earlier ──
+    // Runs BEFORE auto-close so an expired auto-close subscription still gets
+    // its final period invoiced (the service was delivered).
+    const due = await this.prisma.subscription.findMany({
+      where: {
+        status: SubscriptionStatus.active,
+        nextBillingDate: { lt: startOfTomorrow() },
+      },
+      include: {
+        plan: true,
+        lines: { include: { tax: true, product: { include: { variants: true } } } },
+      },
+    });
+
+    const rules = await this.activeDiscountRules(today);
+    const usageState = new Map<number, number>(); // ruleId → applications this run (max_uses enforcement)
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const sub of due) {
+      try {
+        const result = await this.billSubscription(sub, rules, usageState, today);
+        created += result.created;
+        skipped += result.skipped;
+      } catch (err) {
+        failed += 1;
+        console.error(`[billing] subscription ${sub.id} failed:`, err);
+      }
+    }
+
+    // ── Housekeeping (D9), step 2: auto-close expired subs AFTER billing ──
     const expired = await this.prisma.subscription.findMany({
       where: {
         status: { in: [SubscriptionStatus.active, SubscriptionStatus.paused] },
@@ -101,37 +134,6 @@ export class BillingService {
             changedBy: userId,
           },
         });
-      }
-    }
-
-    // ── Billing loop: Active subscriptions due today or earlier ──
-    const due = await this.prisma.subscription.findMany({
-      where: {
-        status: SubscriptionStatus.active,
-        nextBillingDate: { lt: startOfTomorrow() },
-      },
-      include: {
-        plan: true,
-        lines: { include: { tax: true, product: { include: { variants: true } } } },
-      },
-    });
-
-    const rules = await this.activeDiscountRules(today);
-    const usageState = new Map<number, number>(); // ruleId → applications this run (max_uses enforcement)
-    let created = 0;
-    let skipped = 0;
-    let failed = 0;
-
-    for (const sub of due) {
-      try {
-        const result = await this.prisma.$transaction((tx) =>
-          this.billSubscription(tx, sub, rules, usageState, today),
-        );
-        created += result.created;
-        skipped += result.skipped;
-      } catch (err) {
-        failed += 1;
-        console.error(`[billing] subscription ${sub.id} failed:`, err);
       }
     }
 
@@ -174,10 +176,11 @@ export class BillingService {
 
   /**
    * Bill one subscription: catch-up over every missed period, one invoice per
-   * period, all inside the caller's transaction.
+   * period. Each PERIOD runs in its own transaction — an already-invoiced
+   * period (crash recovery) or a concurrent-run race must not abort the work
+   * for later periods, and already-billed periods stay billed.
    */
   private async billSubscription(
-    tx: Prisma.TransactionClient,
     sub: SubWithLines,
     rules: DiscountRule[],
     usageState: Map<number, number>,
@@ -188,82 +191,115 @@ export class BillingService {
     let skipped = 0;
     let guard = 0; // hard stop against a pathological schedule
 
-    while (nextBilling < startOfTomorrow() && guard++ < 100) {
+    // Auto-close plans terminate at expiry (SUB-08) — never bill a period
+    // starting at/after it. Plans without auto_close keep billing monthly
+    // while Active (renewal-by-inaction; only manual close stops them).
+    const horizon = sub.plan.autoClose ? sub.expiryDate : startOfTomorrow();
+
+    while (nextBilling < startOfTomorrow() && nextBilling < horizon && guard++ < 100) {
       const periodStart = new Date(nextBilling);
       const periodEnd = addPeriod(periodStart, sub.plan.billingPeriod);
 
-      // One pass: compute every line + its best discount rule (§6.3/D1)
+      // One pass: compute every line + its best discount rule (§6.3/D1).
+      // Pure — usage is only recorded once the invoice actually lands.
       const subscriptionSubtotal = sub.lines.reduce(
         (acc, l) => acc.plus(new Prisma.Decimal(l.unitPrice).mul(l.quantity)),
         new Prisma.Decimal(0),
       );
-      const usedRules = new Map<number, number>();
       const computed: ComputedLine[] = sub.lines.map((line) => {
-        const best = this.pickDiscount(rules, line, lineSubtotalOf(line), subscriptionSubtotal, usedRules, usageState);
+        const best = this.pickDiscount(rules, line, lineSubtotalOf(line), subscriptionSubtotal, usageState);
         const result = computeLine({
           unit_price: line.unitPrice.toString(),
           quantity: line.quantity,
           tax_percent: line.tax ? Number(line.tax.percentage) : 0,
           discount_amount: best ? best.amount.toString() : '0',
         });
-        return { result, discountName: best ? best.rule.name : null };
+        return { result, discountName: best ? best.rule.name : null, ruleId: best ? best.rule.id : null };
       });
       const totals = computeInvoiceTotals(computed.map((c) => c.result));
 
       const dueDate = new Date(periodStart);
       dueDate.setDate(dueDate.getDate() + sub.paymentTermsDays);
 
+      const advance = addPeriod(periodStart, sub.plan.billingPeriod);
+      let outcome: 'created' | 'skipped';
       try {
-        await tx.invoice.create({
-          data: {
-            subscriptionId: sub.id,
-            customerId: sub.customerId,
-            status: InvoiceStatus.confirmed, // D18: system-generated → payable immediately
-            periodStart,
-            periodEnd,
-            issueDate: today,
-            dueDate,
-            subtotal: new Prisma.Decimal(totals.subtotal),
-            discountTotal: new Prisma.Decimal(totals.discount_total),
-            taxTotal: new Prisma.Decimal(totals.tax_total),
-            total: new Prisma.Decimal(totals.total),
-            lines: {
-              create: sub.lines.map((line, i) => ({
-                productId: line.productId,
-                description: describeLine(line),
-                quantity: line.quantity,
-                unitPrice: new Prisma.Decimal(line.unitPrice),
-                discountAmount: new Prisma.Decimal(computed[i].result.discount_amount),
-                discountName: computed[i].discountName, // DSC-08
-                taxAmount: new Prisma.Decimal(computed[i].result.tax_amount),
-                lineTotal: new Prisma.Decimal(computed[i].result.line_total),
-              })),
+        outcome = await this.prisma.$transaction(async (tx) => {
+          // Pre-check skip (INV-03 recovery path): an invoice for this period
+          // may already exist from a crashed earlier run. Checking first keeps
+          // the transaction healthy — a P2002 here would abort it entirely.
+          const existing = await tx.invoice.findUnique({
+            where: { subscriptionId_periodStart: { subscriptionId: sub.id, periodStart } },
+            select: { id: true },
+          });
+          if (existing) return 'skipped' as const;
+
+          await tx.invoice.create({
+            data: {
+              subscriptionId: sub.id,
+              customerId: sub.customerId,
+              status: InvoiceStatus.confirmed, // D18: system-generated → payable immediately
+              periodStart,
+              periodEnd,
+              issueDate: today,
+              dueDate,
+              subtotal: new Prisma.Decimal(totals.subtotal),
+              discountTotal: new Prisma.Decimal(totals.discount_total),
+              taxTotal: new Prisma.Decimal(totals.tax_total),
+              total: new Prisma.Decimal(totals.total),
+              lines: {
+                create: sub.lines.map((line, i) => ({
+                  productId: line.productId,
+                  description: describeLine(line),
+                  quantity: line.quantity,
+                  unitPrice: new Prisma.Decimal(line.unitPrice),
+                  discountAmount: new Prisma.Decimal(computed[i].result.discount_amount),
+                  discountName: computed[i].discountName, // DSC-08
+                  taxAmount: new Prisma.Decimal(computed[i].result.tax_amount),
+                  lineTotal: new Prisma.Decimal(computed[i].result.line_total),
+                })),
+              },
             },
-          },
+          });
+
+          // Usage counters for rules applied this period (§6.3, same transaction)
+          for (const c of computed) {
+            if (c.ruleId !== null) {
+              await tx.discount.update({ where: { id: c.ruleId }, data: { timesUsed: { increment: 1 } } });
+            }
+          }
+
+          // Advance the schedule atomically with the invoice (INV-04)
+          await tx.subscription.update({
+            where: { id: sub.id },
+            data: { nextBillingDate: advance },
+          });
+          return 'created' as const;
         });
-        created += 1;
       } catch (err) {
         if ((err as { code?: string })?.code === 'P2002') {
-          // Already billed for this period — skip, never double-bill (INV-03)
-          skipped += 1;
+          // Lost a race with a concurrent run — the constraint held (INV-03).
+          // Advance the schedule separately so this period is never retried.
+          outcome = 'skipped';
+          await this.prisma.subscription.update({
+            where: { id: sub.id },
+            data: { nextBillingDate: advance },
+          });
         } else {
           throw err;
         }
       }
 
-      // Usage counters for rules applied this period (§6.3, same transaction)
-      for (const [ruleId, times] of usedRules) {
-        if (times > 0) {
-          await tx.discount.update({ where: { id: ruleId }, data: { timesUsed: { increment: times } } });
+      if (outcome === 'created') {
+        created += 1;
+        for (const c of computed) {
+          if (c.ruleId !== null) usageState.set(c.ruleId, (usageState.get(c.ruleId) ?? 0) + 1);
         }
+      } else {
+        skipped += 1;
       }
 
-      // Advance the schedule; the loop continues while still behind (INV-04)
-      nextBilling = addPeriod(nextBilling, sub.plan.billingPeriod);
-      await tx.subscription.update({
-        where: { id: sub.id },
-        data: { nextBillingDate: nextBilling },
-      });
+      nextBilling = advance;
     }
 
     return { created, skipped };
@@ -271,15 +307,15 @@ export class BillingService {
 
   /**
    * Best single discount for one line (§6.3/D1): scope + qty + purchase
-   * minimums; largest saving wins; ties go to the first rule. Records usage
-   * into `usedRules` (incremented by the caller in the same transaction).
+   * minimums; largest saving wins; ties go to the first rule. Pure — the
+   * caller records usage only after the invoice lands (a skipped period
+   * must not consume a capped rule's budget).
    */
   private pickDiscount(
     rules: DiscountRule[],
     line: SubLine,
     lineSubtotal: Prisma.Decimal,
     subscriptionSubtotal: Prisma.Decimal,
-    usedRules: Map<number, number>,
     usageState: Map<number, number>,
   ): { rule: DiscountRule; amount: Prisma.Decimal } | null {
     let best: { rule: DiscountRule; amount: Prisma.Decimal } | null = null;
@@ -289,7 +325,7 @@ export class BillingService {
       const purchaseBase = rule.scope === 'subscription' ? subscriptionSubtotal : lineSubtotal;
       if (rule.minPurchase.gt(purchaseBase)) continue;
       if (rule.scope === 'product' && !rule.productIds.has(line.productId)) continue;
-      // DSC-05: usage limit — DB counter plus everything applied earlier in this run
+      // DSC-05: usage limit — DB counter plus invoices already landed this run
       if (rule.maxUses > 0 && rule.baseTimesUsed + (usageState.get(rule.id) ?? 0) >= rule.maxUses) continue;
 
       const amount =
@@ -300,10 +336,6 @@ export class BillingService {
       if (!best || amount.gt(best.amount)) best = { rule, amount };
     }
 
-    if (best) {
-      usedRules.set(best.rule.id, (usedRules.get(best.rule.id) ?? 0) + 1);
-      usageState.set(best.rule.id, (usageState.get(best.rule.id) ?? 0) + 1);
-    }
     return best;
   }
 }
