@@ -33,11 +33,11 @@ export function InvoiceDetailModal({
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const balance = new Decimal(invoice.total).minus(new Decimal(invoice.amount_paid));
+  const balance = new Decimal(invoice.total).minus(new Decimal(invoice.amountPaid));
   const isOverdue =
     invoice.status === 'confirmed' &&
     balance.greaterThan(0) &&
-    invoice.due_date < todayIST();
+    invoice.dueDate < todayIST();
 
   const confirmMutation = useMutation({
     mutationFn: () => transitionInvoice(invoice.id, 'confirm'),
@@ -61,7 +61,7 @@ export function InvoiceDetailModal({
       open={true}
       onClose={onClose}
       title={`Invoice ${invoice.number}`}
-      description={`Billed to ${invoice.customer_name ?? invoice.customer_id}`}
+      description={`Billed to ${invoice.customer?.name ?? invoice.customerId}`}
       maxWidth="xl"
     >
       <div className="space-y-6">
@@ -73,7 +73,7 @@ export function InvoiceDetailModal({
                 {invoice.number}
               </span>
               <span className="text-caption text-zinc-400">
-                Linked Contract: <strong className="text-zinc-200">{invoice.subscription_number ?? invoice.subscription_id}</strong>
+                Linked Contract: <strong className="text-zinc-200">{invoice.subscription?.number ?? invoice.subscriptionId}</strong>
               </span>
             </div>
 
@@ -93,28 +93,28 @@ export function InvoiceDetailModal({
             <div>
               <span className="text-zinc-500 uppercase tracking-wider block">Customer</span>
               <span className="text-body font-semibold text-zinc-100 block truncate">
-                {invoice.customer_name ?? invoice.customer_id}
+                {invoice.customer?.name ?? invoice.customerId}
               </span>
             </div>
 
             <div>
               <span className="text-zinc-500 uppercase tracking-wider block">Issue Date</span>
               <span className="text-body text-zinc-200 font-medium tnum">
-                {formatDate(invoice.issue_date)}
+                {formatDate(invoice.issueDate)}
               </span>
             </div>
 
             <div>
               <span className="text-zinc-500 uppercase tracking-wider block">Due Date</span>
               <span className={`text-body font-medium tnum ${isOverdue ? 'text-red-400 font-bold' : 'text-zinc-200'}`}>
-                {formatDate(invoice.due_date)}
+                {formatDate(invoice.dueDate)}
               </span>
             </div>
 
             <div>
               <span className="text-zinc-500 uppercase tracking-wider block">Billing Period</span>
               <span className="text-body text-zinc-300 font-medium tnum">
-                {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
+                {formatDate(invoice.periodStart)} – {formatDate(invoice.periodEnd)}
               </span>
             </div>
           </div>
@@ -138,13 +138,13 @@ export function InvoiceDetailModal({
                 <tr key={l.id} className="hover:bg-white/[0.02]">
                   <td className="px-4 py-3 text-zinc-200 font-medium">{l.description}</td>
                   <td className="px-3 py-3 text-center text-zinc-300">{l.quantity}</td>
-                  <td className="px-3 py-3 text-right text-zinc-300">{formatMoney(l.unit_price)}</td>
+                  <td className="px-3 py-3 text-right text-zinc-300">{formatMoney(l.unitPrice)}</td>
                   <td className="px-3 py-3 text-right">
-                    {Number(l.discount_amount) > 0 ? (
+                    {Number(l.discountAmount) > 0 ? (
                       <span className="text-emerald-400 font-medium">
-                        -{formatMoney(l.discount_amount)}
-                        {l.discount_name && (
-                          <span className="block text-caption text-emerald-500/80">({l.discount_name})</span>
+                        -{formatMoney(l.discountAmount)}
+                        {l.discountName && (
+                          <span className="block text-caption text-emerald-500/80">({l.discountName})</span>
                         )}
                       </span>
                     ) : (
@@ -152,17 +152,16 @@ export function InvoiceDetailModal({
                     )}
                   </td>
                   <td className="px-3 py-3 text-right text-zinc-300">
-                    {Number(l.tax_amount) > 0 ? (
+                    {Number(l.taxAmount) > 0 ? (
                       <span>
-                        {formatMoney(l.tax_amount)}
-                        <span className="block text-caption text-zinc-500">({l.tax_rate}%)</span>
+                        {formatMoney(l.taxAmount)}
                       </span>
                     ) : (
                       <span className="text-zinc-600">0%</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-zinc-100 font-semibold">
-                    {formatMoney(l.line_total)}
+                    {formatMoney(l.lineTotal)}
                   </td>
                 </tr>
               ))}
@@ -177,7 +176,7 @@ export function InvoiceDetailModal({
             <div className="flex items-center gap-2">
               <span className="text-caption text-zinc-500">Amount Paid:</span>
               <span className="text-body font-semibold text-emerald-400 tnum">
-                {formatMoney(invoice.amount_paid)}
+                {formatMoney(invoice.amountPaid)}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -193,15 +192,15 @@ export function InvoiceDetailModal({
               <span>Subtotal:</span>
               <span className="font-medium text-zinc-200">{formatMoney(invoice.subtotal)}</span>
             </div>
-            {Number(invoice.discount_total) > 0 && (
+            {Number(invoice.discountTotal) > 0 && (
               <div className="flex justify-between text-caption text-emerald-400">
                 <span>Discounts Auto-applied:</span>
-                <span className="font-medium">-{formatMoney(invoice.discount_total)}</span>
+                <span className="font-medium">-{formatMoney(invoice.discountTotal)}</span>
               </div>
             )}
             <div className="flex justify-between text-caption text-zinc-400">
               <span>Tax Total (GST):</span>
-              <span className="font-medium text-zinc-200">{formatMoney(invoice.tax_total)}</span>
+              <span className="font-medium text-zinc-200">{formatMoney(invoice.taxTotal)}</span>
             </div>
             <div className="flex justify-between text-subheading font-bold text-zinc-100 pt-2 border-t border-white/[0.08]">
               <span>Total Due:</span>

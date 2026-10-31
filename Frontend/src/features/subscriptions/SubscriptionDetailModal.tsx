@@ -35,7 +35,7 @@ export function SubscriptionDetailModal({
   const { toast } = useToast();
 
   const transitionMutation = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: SubscriptionAction }) =>
+    mutationFn: ({ id, action }: { id: number; action: SubscriptionAction }) =>
       transitionSubscription(id, action),
     onSuccess: (updated) => {
       toast('success', `Subscription ${updated.number} moved to ${updated.status}.`);
@@ -60,7 +60,7 @@ export function SubscriptionDetailModal({
       open={true}
       onClose={onClose}
       title={`Subscription ${subscription.number}`}
-      description={`Customer Contract · ${subscription.plan_name ?? 'Plan'}`}
+      description={`Customer Contract · ${subscription.plan?.name ?? 'Plan'}`}
       maxWidth="xl"
     >
       <div className="space-y-6">
@@ -199,39 +199,39 @@ export function SubscriptionDetailModal({
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Customer</span>
             <span className="text-body font-medium text-zinc-200 block truncate">
-              {subscription.customer_name ?? subscription.customer_id}
+              {subscription.customer?.name ?? subscription.customerId}
             </span>
           </div>
 
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Plan</span>
             <span className="text-body font-medium text-zinc-200 block">
-              {subscription.plan_name ?? '—'}
+              {subscription.plan?.name ?? '—'}
             </span>
           </div>
 
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Payment Terms</span>
             <span className="text-body font-medium text-zinc-200 capitalize">
-              {subscription.payment_terms.replace('_', ' ')}
+              {subscription.paymentTermsDays === 0 ? 'Immediate' : `Net ${subscription.paymentTermsDays}`}
             </span>
           </div>
 
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Next Billing</span>
             <span className="text-body font-medium text-primary-300 tnum">
-              {formatDate(subscription.next_billing_date)}
+              {formatDate(subscription.nextBillingDate)}
             </span>
           </div>
 
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Start Date</span>
-            <span className="text-body text-zinc-300 tnum">{formatDate(subscription.start_date)}</span>
+            <span className="text-body text-zinc-300 tnum">{formatDate(subscription.startDate)}</span>
           </div>
 
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">Expiry Date</span>
-            <span className="text-body text-zinc-300 tnum">{formatDate(subscription.expiry_date)}</span>
+            <span className="text-body text-zinc-300 tnum">{formatDate(subscription.expiryDate)}</span>
           </div>
 
           <div className="space-y-1 sm:col-span-2">
@@ -260,21 +260,21 @@ export function SubscriptionDetailModal({
               </thead>
               <tbody className="divide-y divide-white/[0.05]">
                 {subscription.lines.map((l) => {
-                  const lineTotal = Number(l.unit_price) * l.quantity;
+                  const lineTotal = Number(l.unitPrice) * l.quantity;
                   return (
                     <tr key={l.id} className="hover:bg-white/[0.02]">
-                      <td className="px-4 py-3 text-zinc-200 font-medium">{l.product_name ?? l.product_id}</td>
+                      <td className="px-4 py-3 text-zinc-200 font-medium">{l.product?.name ?? l.productId}</td>
                       <td className="px-3 py-3">
-                        {l.variant_label ? (
+                        {l.variantId ? (
                           <span className="px-2 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/25 text-caption font-medium text-primary-300">
-                            {l.variant_label}
+                            {l.product?.variants?.find((v) => v.id === l.variantId)?.value}
                           </span>
                         ) : (
                           <span className="text-zinc-600">—</span>
                         )}
                       </td>
                       <td className="px-3 py-3 text-center text-zinc-300">{l.quantity}</td>
-                      <td className="px-3 py-3 text-right text-zinc-300">{formatMoney(l.unit_price)}</td>
+                      <td className="px-3 py-3 text-right text-zinc-300">{formatMoney(l.unitPrice)}</td>
                       <td className="px-4 py-3 text-right text-zinc-100 font-semibold">
                         {formatMoney(lineTotal.toFixed(2))}
                       </td>
@@ -293,20 +293,20 @@ export function SubscriptionDetailModal({
             Audit History & Status Transitions
           </h4>
 
-          {subscription.history.length === 0 ? (
+          {(subscription.history ?? []).length === 0 ? (
             <p className="text-caption text-zinc-500">No transition history recorded.</p>
           ) : (
             <div className="space-y-2 border-l-2 border-white/[0.08] ml-2 pl-4 py-1">
-              {subscription.history.map((h, i) => (
+              {(subscription.history ?? []).map((h, i) => (
                 <div key={h.id || i} className="relative flex items-center justify-between text-caption py-1">
                   <div className="absolute -left-[21px] top-2 h-2.5 w-2.5 rounded-full bg-primary-400 ring-4 ring-surface-950" />
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-zinc-200 capitalize">
-                      {h.from_status ? `${h.from_status} → ${h.to_status}` : h.to_status}
+                      {h.fromStatus ? `${h.fromStatus} → ${h.toStatus}` : h.toStatus}
                     </span>
-                    <span className="text-zinc-500">by {h.changed_by}</span>
+                    <span className="text-zinc-500">by {h.changedBy}</span>
                   </div>
-                  <span className="text-zinc-500 tnum">{formatDate(h.changed_at)}</span>
+                  <span className="text-zinc-500 tnum">{formatDate(h.changedAt)}</span>
                 </div>
               ))}
             </div>

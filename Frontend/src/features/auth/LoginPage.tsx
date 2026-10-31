@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginSchema, type LoginFormValues } from '@/lib/schemas';
-import { login, persistToken } from '@/api/auth';
+import { login, persistToken, getMe } from '@/api/auth';
 import { useAuth } from '@/features/auth/AuthContext';
 import { ApiError } from '@/api/client';
 import { Button, Field, Input } from '@/components/ui';
@@ -30,10 +30,11 @@ export function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       const res = await login(data);
-      persistToken(res.access_token);
-      setUser(res.user);
+      persistToken(res.token);
+      const me = await getMe(); // full profile — login returns the slim auth payload
+      setUser(me);
 
-      if (res.user.role === 'customer') {
+      if (me.role === 'customer') {
         navigate('/portal', { replace: true });
       } else {
         navigate('/app', { replace: true });

@@ -27,6 +27,12 @@ export class InvoicesController {
   }
 
   @Roles(Role.admin, Role.staff)
+  @Post('invoices/:id/cancel')
+  cancel(@Param('id', ParseIntPipe) id: number, @Req() req: Request & { user: RequestUser }) {
+    return this.invoices.cancel(id, req.user.id);
+  }
+
+  @Roles(Role.admin, Role.staff)
   @Post('invoices/:id/payments')
   recordPayment(
     @Param('id', ParseIntPipe) id: number,

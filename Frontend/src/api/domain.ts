@@ -1,5 +1,4 @@
-import { apiClient, getToken } from '@/api/client';
-import { mockHandlers, isMockEnabled } from '@/api/mocks';
+import { apiClient } from '@/api/client';
 import type {
   Customer,
   Subscription,
@@ -29,26 +28,13 @@ function buildQuery(params?: object): string {
   return qs ? `?${qs}` : '';
 }
 
-function actorName(): string {
-  try {
-    const token = getToken();
-    if (!token) return 'unknown';
-    const payload = JSON.parse(atob(token.split('.')[1])) as { email?: string };
-    return payload.email ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
 // ─── Users (admin) ───
 
 export async function getUsers(params?: PaginationParams): Promise<PaginatedResponse<User>> {
-  if (isMockEnabled()) return mockHandlers.getUsers(params);
   return apiClient<PaginatedResponse<User>>(`/users${buildQuery(params)}`);
 }
 
 export async function createStaff(payload: { name: string; email: string; password: string }): Promise<User> {
-  if (isMockEnabled()) return mockHandlers.createStaff(payload);
   return apiClient<User>('/users', { method: 'POST', body: JSON.stringify(payload) });
 }
 
@@ -57,43 +43,36 @@ export async function createStaff(payload: { name: string; email: string; passwo
 export async function getCustomers(
   params?: PaginationParams & { search?: string },
 ): Promise<PaginatedResponse<Customer>> {
-  if (isMockEnabled()) return mockHandlers.getCustomers(params);
   return apiClient<PaginatedResponse<Customer>>(`/customers${buildQuery(params)}`);
 }
 
 export async function createCustomer(payload: CreateCustomerPayload): Promise<Customer> {
-  if (isMockEnabled()) return mockHandlers.createCustomer(payload);
   return apiClient<Customer>('/customers', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 // ─── Subscriptions ───
 
 export async function getSubscriptions(
-  params?: PaginationParams & { status?: SubscriptionStatus | 'all'; customer_id?: string; search?: string },
+  params?: PaginationParams & { status?: SubscriptionStatus | 'all'; customer_id?: number; search?: string },
 ): Promise<PaginatedResponse<Subscription>> {
-  if (isMockEnabled()) return mockHandlers.getSubscriptions(params);
   return apiClient<PaginatedResponse<Subscription>>(`/subscriptions${buildQuery(params)}`);
 }
 
-export async function getSubscription(id: string): Promise<Subscription> {
-  if (isMockEnabled()) return mockHandlers.getSubscription(id);
+export async function getSubscription(id: number): Promise<Subscription> {
   return apiClient<Subscription>(`/subscriptions/${id}`);
 }
 
 export async function createSubscription(payload: CreateSubscriptionPayload): Promise<Subscription> {
-  if (isMockEnabled()) return mockHandlers.createSubscription(payload, actorName());
   return apiClient<Subscription>('/subscriptions', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function transitionSubscription(id: string, action: SubscriptionAction): Promise<Subscription> {
-  if (isMockEnabled()) return mockHandlers.transitionSubscription(id, action, actorName());
+export async function transitionSubscription(id: number, action: SubscriptionAction): Promise<Subscription> {
   return apiClient<Subscription>(`/subscriptions/${id}/${action}`, { method: 'POST' });
 }
 
 // ─── Billing & Invoices ───
 
 export async function runBilling(): Promise<BillingRunSummary> {
-  if (isMockEnabled()) return mockHandlers.runBilling(actorName());
   return apiClient<BillingRunSummary>('/billing/run', { method: 'POST' });
 }
 
@@ -101,36 +80,31 @@ export async function getInvoices(
   params?: PaginationParams & {
     status?: InvoiceStatus | 'all';
     overdue?: boolean;
-    customer_id?: string;
-    subscription_id?: string;
+    customer_id?: number;
+    subscription_id?: number;
     search?: string;
   },
 ): Promise<PaginatedResponse<Invoice>> {
-  if (isMockEnabled()) return mockHandlers.getInvoices(params);
   return apiClient<PaginatedResponse<Invoice>>(`/invoices${buildQuery(params)}`);
 }
 
-export async function getInvoice(id: string): Promise<Invoice> {
-  if (isMockEnabled()) return mockHandlers.getInvoice(id);
+export async function getInvoice(id: number): Promise<Invoice> {
   return apiClient<Invoice>(`/invoices/${id}`);
 }
 
-export async function transitionInvoice(id: string, action: 'confirm' | 'cancel'): Promise<Invoice> {
-  if (isMockEnabled()) return mockHandlers.transitionInvoice(id, action);
+export async function transitionInvoice(id: number, action: 'confirm' | 'cancel'): Promise<Invoice> {
   return apiClient<Invoice>(`/invoices/${id}/${action}`, { method: 'POST' });
 }
 
 // ─── Payments ───
 
 export async function getPayments(
-  params?: PaginationParams & { invoice_id?: string; customer_id?: string },
+  params?: PaginationParams & { invoice_id?: number; customer_id?: number },
 ): Promise<PaginatedResponse<Payment>> {
-  if (isMockEnabled()) return mockHandlers.getPayments(params);
   return apiClient<PaginatedResponse<Payment>>(`/payments${buildQuery(params)}`);
 }
 
-export async function recordPayment(invoiceId: string, payload: RecordPaymentPayload): Promise<Payment> {
-  if (isMockEnabled()) return mockHandlers.recordPayment(invoiceId, payload, actorName());
+export async function recordPayment(invoiceId: number, payload: RecordPaymentPayload): Promise<Payment> {
   return apiClient<Payment>(`/invoices/${invoiceId}/payments`, {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -140,40 +114,20 @@ export async function recordPayment(invoiceId: string, payload: RecordPaymentPay
 // ─── Reports ───
 
 export async function getReportSummary(): Promise<ReportSummary> {
-  if (isMockEnabled()) return mockHandlers.getReportSummary();
   return apiClient<ReportSummary>('/reports/summary');
 }
 
-export async function getOverdueInvoices(): Promise<OverdueInvoice[]> {
-  if (isMockEnabled()) return mockHandlers.getOverdueInvoices();
-  return apiClient<OverdueInvoice[]>('/reports/overdue');
+export async function getOverdueInvoices(): Promise<PaginatedResponse<OverdueInvoice>> {
+  return apiClient<PaginatedResponse<OverdueInvoice>>('/reports/overdue');
 }
 
 // ─── Portal (customer-scoped by the backend via the JWT) ───
 
 export async function getPortalSubscriptions(params?: PaginationParams): Promise<PaginatedResponse<Subscription>> {
-  if (isMockEnabled()) return mockHandlers.getPortalSubscriptions(currentCustomerId(), params);
   return apiClient<PaginatedResponse<Subscription>>(`/portal/subscriptions${buildQuery(params)}`);
 }
 
 export async function getPortalInvoices(params?: PaginationParams): Promise<PaginatedResponse<Invoice>> {
-  if (isMockEnabled()) return mockHandlers.getPortalInvoices(currentCustomerId(), params);
   return apiClient<PaginatedResponse<Invoice>>(`/portal/invoices${buildQuery(params)}`);
 }
 
-function currentCustomerId(): string | null {
-  try {
-    const token = getToken();
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split('.')[1])) as { sub: string };
-    // Mock user store: customer_id is resolved server-side; for mocks we look it up
-    return mockCustomerId(payload.sub);
-  } catch {
-    return null;
-  }
-}
-
-function mockCustomerId(userId: string): string | null {
-  const known: Record<string, string> = { '3': 'cust_1' };
-  return known[userId] ?? null;
-}

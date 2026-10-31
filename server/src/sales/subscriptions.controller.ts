@@ -47,6 +47,18 @@ export class SubscriptionsController {
   }
 
   @Roles(Role.admin, Role.staff)
+  @Post('subscriptions/:id/pause')
+  pause(@Param('id', ParseIntPipe) id: number, @Req() req: Request & { user: RequestUser }) {
+    return this.subscriptions.transition(id, 'paused', req.user.id);
+  }
+
+  @Roles(Role.admin, Role.staff)
+  @Post('subscriptions/:id/resume')
+  resume(@Param('id', ParseIntPipe) id: number, @Req() req: Request & { user: RequestUser }) {
+    return this.subscriptions.transition(id, 'active', req.user.id);
+  }
+
+  @Roles(Role.admin, Role.staff)
   @Post('subscriptions/:id/close')
   close(@Param('id', ParseIntPipe) id: number, @Req() req: Request & { user: RequestUser }) {
     return this.subscriptions.transition(id, 'closed', req.user.id);

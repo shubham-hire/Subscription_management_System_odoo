@@ -113,24 +113,6 @@ export function RunBillingModal({ open, onClose, onCompleted }: RunBillingModalP
               </div>
             </div>
 
-            {summary.invoice_numbers.length > 0 && (
-              <div>
-                <span className="text-caption text-zinc-400 font-semibold block mb-2">
-                  Generated Invoices:
-                </span>
-                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 rounded-lg bg-surface-900 border border-white/[0.06]">
-                  {summary.invoice_numbers.map((num) => (
-                    <span
-                      key={num}
-                      className="px-2.5 py-1 rounded-md bg-primary-500/10 border border-primary-500/20 text-caption font-mono font-medium text-primary-300"
-                    >
-                      {num}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="flex justify-between items-center pt-3 border-t border-white/[0.08]">
               <Button
                 variant="secondary"

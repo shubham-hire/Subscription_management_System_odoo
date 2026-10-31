@@ -79,11 +79,11 @@ export function PortalInvoicesPage() {
             {!isLoading &&
               !isError &&
               data?.items.map((inv) => {
-                const balance = new Decimal(inv.total).minus(new Decimal(inv.amount_paid));
+                const balance = new Decimal(inv.total).minus(new Decimal(inv.amountPaid));
                 const isOverdue =
                   inv.status === 'confirmed' &&
                   balance.greaterThan(0) &&
-                  inv.due_date < todayIST();
+                  inv.dueDate < todayIST();
 
                 return (
                   <TableRow
@@ -96,17 +96,17 @@ export function PortalInvoicesPage() {
                         {inv.number}
                       </span>
                       <span className="text-caption text-zinc-500">
-                        Issued {formatDate(inv.issue_date)}
+                        Issued {formatDate(inv.issueDate)}
                       </span>
                     </TableCell>
                     <TableCell className="text-caption text-zinc-300 tnum">
-                      {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
+                      {formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5 tnum">
                         {isOverdue && <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />}
                         <span className={`text-caption ${isOverdue ? 'text-red-300 font-bold' : 'text-zinc-300'}`}>
-                          {formatDate(inv.due_date)}
+                          {formatDate(inv.dueDate)}
                         </span>
                       </div>
                     </TableCell>

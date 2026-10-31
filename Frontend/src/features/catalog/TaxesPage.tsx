@@ -12,7 +12,6 @@ import {
   Card,
   Field,
   Input,
-  Select,
   StatusBadge,
   Table,
   TableHead,
@@ -52,9 +51,7 @@ export function TaxesPage() {
     resolver: zodResolver(taxSchema),
     defaultValues: {
       name: '',
-      rate: '',
-      is_inclusive: false,
-      status: 'active',
+      percentage: 18,
     },
   });
 
@@ -62,9 +59,7 @@ export function TaxesPage() {
     setSelectedTax(null);
     reset({
       name: '',
-      rate: '',
-      is_inclusive: false,
-      status: 'active',
+      percentage: 18,
     });
     setDialogMode('create');
   };
@@ -73,9 +68,7 @@ export function TaxesPage() {
     setSelectedTax(tax);
     reset({
       name: tax.name,
-      rate: tax.rate,
-      is_inclusive: tax.is_inclusive,
-      status: tax.status,
+      percentage: Number(tax.percentage),
     });
     setDialogMode('edit');
   };
@@ -105,7 +98,7 @@ export function TaxesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: TaxFormValues }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: TaxFormValues }) =>
       updateTax(id, payload),
     onSuccess: () => {
       toast('success', 'Tax rule updated successfully.');
@@ -178,27 +171,17 @@ export function TaxesPage() {
               {data.items.map((tax) => (
                 <TableRow key={tax.id}>
                   <TableCell className="font-medium text-gray-900">{tax.name}</TableCell>
-                  <TableCell className="font-semibold text-gray-900">{tax.rate}%</TableCell>
+                  <TableCell className="font-semibold text-gray-900">{tax.percentage}%</TableCell>
                   <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-caption font-medium ${
-                        tax.is_inclusive
-                          ? 'bg-purple-50 text-purple-700'
-                          : 'bg-blue-50 text-blue-700'
-                      }`}
-                    >
-                      {tax.is_inclusive ? 'Price Inclusive' : 'Exclusive (Added to subtotal)'}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-caption font-medium bg-blue-50 text-blue-700">
+                      Exclusive (Added to subtotal)
                     </span>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={tax.status} />
+                    <StatusBadge status={tax.isActive ? 'active' : 'closed'} />
                   </TableCell>
                   <TableCell className="text-gray-500">
-                    {new Date(tax.created_at).toLocaleDateString('en-IN', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    '—'
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -258,33 +241,16 @@ export function TaxesPage() {
             />
           </Field>
 
-          <Field label="Tax Rate (%)" htmlFor="tax-rate" error={errors.rate?.message}>
+          <Field label="Tax Rate (%)" htmlFor="tax-percentage" error={errors.percentage?.message}>
             <Input
-              id="tax-rate"
+              id="tax-percentage"
               placeholder="18.00"
-              hasError={!!errors.rate}
-              {...register('rate')}
+              hasError={!!errors.percentage}
+              {...register('percentage')}
             />
           </Field>
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              id="tax-inclusive"
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
-              {...register('is_inclusive')}
-            />
-            <label htmlFor="tax-inclusive" className="text-body text-gray-700">
-              Tax is already included in plan price (Inclusive)
-            </label>
-          </div>
 
-          <Field label="Status" htmlFor="tax-status" error={errors.status?.message}>
-            <Select id="tax-status" hasError={!!errors.status} {...register('status')}>
-              <option value="active">Active</option>
-              <option value="closed">Closed</option>
-            </Select>
-          </Field>
         </form>
       </Dialog>
     </div>

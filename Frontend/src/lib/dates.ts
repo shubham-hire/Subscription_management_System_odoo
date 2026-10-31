@@ -81,10 +81,13 @@ const DISPLAY = new Intl.DateTimeFormat('en-IN', {
   timeZone: 'UTC',
 });
 
-/** '2026-10-31' → '31 Oct 2026' */
+/** '2026-10-31' or a full ISO timestamp → '31 Oct 2026' */
 export function formatDate(iso: string): string {
   if (!iso) return '—';
-  return DISPLAY.format(parseDate(iso));
+  // The API returns date-only strings for some fields and full ISO
+  // timestamps for others — normalize to the date part before parsing.
+  const datePart = String(iso).split('T')[0];
+  return DISPLAY.format(parseDate(datePart));
 }
 
 /** ISO timestamp → '31 Oct 2026, 2:45 pm' */

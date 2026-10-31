@@ -39,23 +39,38 @@ export class ReportsService {
     };
   }
 
-  /** RPT-04: overdue sorted by days overdue, with customer contact details. */
-  async overdue() {
+  /**
+   * RPT-04: overdue sorted by days overdue, with customer contact details.
+   * Paginated — the dashboard renders the top N and the full set can be
+   * thousands of rows (a 4,500-item payload blanked a debug build).
+   */
+  async overdue(page = 1, pageSize = 10) {
     const today = startOfToday();
-    const invoices = await this.prisma.invoice.findMany({
-      where: { status: InvoiceStatus.confirmed, dueDate: { lt: today } },
-      include: {
-        customer: { select: { id: true, name: true, company: true, email: true, phone: true } },
-      },
-      orderBy: { dueDate: 'asc' },
-    });
+    const where: Prisma.InvoiceWhereInput = {
+      status: InvoiceStatus.confirmed,
+      dueDate: { lt: today },
+    };
+    const [invoices, total] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, name: true, company: true, email: true, phone: true } },
+          subscription: { select: { number: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
 
-    return invoices
+    const items = invoices
       .filter((inv) => new Prisma.Decimal(inv.total).gt(inv.amountPaid))
       .map((inv) => ({
         id: inv.id,
         number: inv.number,
         customer: inv.customer,
+        subscription_number: inv.subscription?.number ?? null,
         total: inv.total,
         amount_paid: inv.amountPaid,
         balance: new Prisma.Decimal(inv.total).minus(inv.amountPaid).toFixed(2),
@@ -63,5 +78,6 @@ export class ReportsService {
         days_overdue: Math.floor((today.getTime() - inv.dueDate.getTime()) / 86_400_000),
         overdue: isOverdue(inv),
       }));
+    return { items, total, page, page_size: pageSize };
   }
 }

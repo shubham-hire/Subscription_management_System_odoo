@@ -8,6 +8,7 @@ import type {
   PaymentTerms,
   CreateSubscriptionPayload,
 } from '@/types';
+import { PAYMENT_TERMS_DAYS } from '@/types';
 import { todayIST, addPeriod } from '@/lib/dates';
 import { formatMoney } from '@/lib/money';
 import {
@@ -22,7 +23,7 @@ import {
 interface CreateSubscriptionModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated?: (subId: string) => void;
+  onCreated?: (subId: number) => void;
 }
 
 interface FormLine {
@@ -79,7 +80,7 @@ export function CreateSubscriptionModal({
   const products = productsQuery.data?.items ?? [];
   const taxes = taxesQuery.data?.items ?? [];
 
-  const selectedPlan = plans.find((p) => p.id === planId);
+  const selectedPlan = plans.find((p) => String(p.id) === planId);
 
   // Line actions
   const addLine = () => {
@@ -110,9 +111,9 @@ export function CreateSubscriptionModal({
         const next = { ...l, ...updates };
         // If product changed, reset variant and pre-fill default product tax
         if (updates.product_id !== undefined && updates.product_id !== l.product_id) {
-          const prod = products.find((p) => p.id === updates.product_id);
+          const prod = products.find((p) => String(p.id) === updates.product_id);
           next.variant_id = '';
-          if (prod?.tax_id) next.tax_id = prod.tax_id;
+          if (prod?.taxId) next.tax_id = String(prod.taxId);
         }
         return next;
       }),
@@ -126,15 +127,15 @@ export function CreateSubscriptionModal({
 
     lines.forEach((line) => {
       if (!line.product_id) return;
-      const product = products.find((p) => p.id === line.product_id);
+      const product = products.find((p) => String(p.id) === line.product_id);
       if (!product) return;
 
-      const basePrice = new Decimal(product.sales_price ?? '0');
+      const basePrice = new Decimal(product.salesPrice ?? '0');
       let extra = new Decimal(0);
 
       if (line.variant_id && product.variants) {
-        const variant = product.variants.find((v) => v.id === line.variant_id);
-        if (variant) extra = new Decimal(variant.price_extra ?? '0');
+        const variant = product.variants.find((v) => String(v.id) === line.variant_id);
+        if (variant) extra = new Decimal(variant.priceExtra ?? '0');
       }
 
       const unitPrice = basePrice.plus(extra);
@@ -142,9 +143,9 @@ export function CreateSubscriptionModal({
       subtotal = subtotal.plus(lineSubtotal);
 
       // Tax calculation
-      const tax = taxes.find((t) => t.id === line.tax_id);
+      const tax = taxes.find((t) => String(t.id) === line.tax_id);
       if (tax) {
-        const rate = new Decimal(tax.rate).dividedBy(100);
+        const rate = new Decimal(tax.percentage).dividedBy(100);
         const lineTax = lineSubtotal.times(rate);
         taxTotal = taxTotal.plus(lineTax);
       }
@@ -162,11 +163,10 @@ export function CreateSubscriptionModal({
   const billingDates = useMemo(() => {
     if (!selectedPlan || !startDate) return null;
     try {
-      const nextDate = addPeriod(
-        startDate,
-        selectedPlan.billing_interval,
-        selectedPlan.interval_count,
-      );
+      const interval = ({ daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' } as const)[
+        selectedPlan.billingPeriod
+      ];
+      const nextDate = addPeriod(startDate, interval, 1);
       return { nextDate };
     } catch {
       return null;
@@ -205,15 +205,15 @@ export function CreateSubscriptionModal({
     }
 
     const payload: CreateSubscriptionPayload = {
-      customer_id: customerId,
-      plan_id: planId,
+      customer_id: Number(customerId),
+      plan_id: Number(planId),
       start_date: startDate,
-      payment_terms: paymentTerms,
+      payment_terms_days: PAYMENT_TERMS_DAYS[paymentTerms],
       lines: lines.map((l) => ({
-        product_id: l.product_id,
-        variant_id: l.variant_id || null,
+        product_id: Number(l.product_id),
+        variant_id: l.variant_id ? Number(l.variant_id) : null,
         quantity: Number(l.quantity),
-        tax_id: l.tax_id || null,
+        tax_id: l.tax_id ? Number(l.tax_id) : null,
       })),
     };
 
@@ -254,10 +254,10 @@ export function CreateSubscriptionModal({
             >
               <option value="">Select plan...</option>
               {plans
-                .filter((p) => p.status === 'active')
+                .filter((p) => p.isActive)
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({p.interval_count > 1 ? `${p.interval_count} ` : ''}{p.billing_interval}ly)
+                    {p.name} ({p.billingPeriod})
                   </option>
                 ))}
             </Select>
@@ -304,12 +304,12 @@ export function CreateSubscriptionModal({
 
           <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
             {lines.map((line) => {
-              const product = products.find((p) => p.id === line.product_id);
+              const product = products.find((p) => String(p.id) === line.product_id);
               const variants = product?.variants ?? [];
-              const selectedVariant = variants.find((v) => v.id === line.variant_id);
+              const selectedVariant = variants.find((v) => String(v.id) === line.variant_id);
 
-              const basePrice = product?.sales_price ? new Decimal(product.sales_price) : new Decimal(0);
-              const extra = selectedVariant?.price_extra ? new Decimal(selectedVariant.price_extra) : new Decimal(0);
+              const basePrice = product?.salesPrice ? new Decimal(product.salesPrice) : new Decimal(0);
+              const extra = selectedVariant?.priceExtra ? new Decimal(selectedVariant.priceExtra) : new Decimal(0);
               const unitEffective = basePrice.plus(extra);
               const lineTotal = unitEffective.times(line.quantity || 0);
 
@@ -328,10 +328,10 @@ export function CreateSubscriptionModal({
                     >
                       <option value="">Select product...</option>
                       {products
-                        .filter((p) => p.status === 'active')
+                        .filter((p) => p.isActive)
                         .map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} ({formatMoney(p.sales_price ?? '0')})
+                            {p.name} ({formatMoney(p.salesPrice ?? '0')})
                           </option>
                         ))}
                     </Select>
@@ -348,7 +348,7 @@ export function CreateSubscriptionModal({
                       <option value="">No Variant (Base)</option>
                       {variants.map((v) => (
                         <option key={v.id} value={v.id}>
-                          {v.attribute}: {v.value} (+{formatMoney(v.price_extra)})
+                          {v.attribute}: {v.value} (+{formatMoney(v.priceExtra)})
                         </option>
                       ))}
                     </Select>
@@ -378,10 +378,10 @@ export function CreateSubscriptionModal({
                     >
                       <option value="">No Tax (0%)</option>
                       {taxes
-                        .filter((t) => t.status === 'active')
+                        .filter((t) => t.isActive)
                         .map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name} ({t.rate}%)
+                            {t.name} ({t.percentage}%)
                           </option>
                         ))}
                     </Select>
@@ -420,7 +420,7 @@ export function CreateSubscriptionModal({
               <span className="font-medium text-zinc-200">Recurring Schedule:</span>
               <span>
                 {selectedPlan
-                  ? `Every ${selectedPlan.interval_count > 1 ? `${selectedPlan.interval_count} ` : ''}${selectedPlan.billing_interval} (Starts ${startDate})`
+                  ? `Every ${selectedPlan.billingPeriod} (Starts ${startDate})`
                   : 'Select plan to preview dates'}
               </span>
             </div>

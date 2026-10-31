@@ -178,7 +178,7 @@ export function PaymentsPage() {
                     </TableCell>
                     <TableCell>
                       <span className="font-mono text-body font-semibold text-zinc-100">
-                        {pay.invoice_number ?? pay.invoice_id}
+                        {pay.invoice?.number ?? pay.invoiceId}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -190,13 +190,13 @@ export function PaymentsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-zinc-300 tnum text-caption">
-                      {formatDate(pay.payment_date)}
+                      {formatDate(pay.paymentDate)}
                     </TableCell>
                     <TableCell className="text-right text-emerald-400 font-bold text-body tnum">
                       +{formatMoney(pay.amount)}
                     </TableCell>
                     <TableCell className="text-caption text-zinc-400 truncate max-w-[140px]">
-                      {pay.recorded_by}
+                      {pay.recordedBy}
                     </TableCell>
                     <TableCell className="text-caption text-zinc-500 truncate max-w-[200px]">
                       {pay.note || '—'}

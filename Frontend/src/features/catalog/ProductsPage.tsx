@@ -12,7 +12,6 @@ import {
   Card,
   Field,
   Input,
-  Select,
   Textarea,
   StatusBadge,
   Table,
@@ -53,8 +52,10 @@ export function ProductsPage() {
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: '',
-      description: '',
-      status: 'active',
+      type: '',
+      sales_price: '',
+      cost_price: '',
+      notes: '',
     },
   });
 
@@ -62,8 +63,10 @@ export function ProductsPage() {
     setSelectedProduct(null);
     reset({
       name: '',
-      description: '',
-      status: 'active',
+      type: '',
+      sales_price: '',
+      cost_price: '',
+      notes: '',
     });
     setDialogMode('create');
   };
@@ -72,8 +75,10 @@ export function ProductsPage() {
     setSelectedProduct(product);
     reset({
       name: product.name,
-      description: product.description,
-      status: product.status,
+      type: product.type,
+      sales_price: product.salesPrice,
+      cost_price: product.costPrice,
+      notes: product.notes ?? '',
     });
     setDialogMode('edit');
   };
@@ -103,7 +108,7 @@ export function ProductsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: ProductFormValues }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: ProductFormValues }) =>
       updateProduct(id, payload),
     onSuccess: () => {
       toast('success', 'Product updated successfully.');
@@ -176,17 +181,13 @@ export function ProductsPage() {
                 <TableRow key={product.id}>
                   <TableCell className="font-medium text-gray-900">{product.name}</TableCell>
                   <TableCell className="text-gray-500 max-w-md truncate">
-                    {product.description || '—'}
+                    {product.notes || '—'}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={product.status} />
+                    <StatusBadge status={product.isActive ? 'active' : 'closed'} />
                   </TableCell>
                   <TableCell className="text-gray-500">
-                    {new Date(product.created_at).toLocaleDateString('en-IN', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    '—'
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -246,20 +247,44 @@ export function ProductsPage() {
             />
           </Field>
 
-          <Field label="Description" htmlFor="prod-desc" error={errors.description?.message}>
-            <Textarea
-              id="prod-desc"
-              placeholder="Brief description of what this product includes..."
-              hasError={!!errors.description}
-              {...register('description')}
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Product Type" htmlFor="prod-type" error={errors.type?.message}>
+              <Input
+                id="prod-type"
+                placeholder="e.g. software"
+                hasError={!!errors.type}
+                {...register('type')}
+              />
+            </Field>
 
-          <Field label="Status" htmlFor="prod-status" error={errors.status?.message}>
-            <Select id="prod-status" hasError={!!errors.status} {...register('status')}>
-              <option value="active">Active</option>
-              <option value="closed">Closed</option>
-            </Select>
+            <Field label="Sales Price (INR)" htmlFor="prod-price" error={errors.sales_price?.message}>
+              <Input
+                id="prod-price"
+                placeholder="2999.00"
+                hasError={!!errors.sales_price}
+                {...register('sales_price')}
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Cost Price (INR)" htmlFor="prod-cost" error={errors.cost_price?.message}>
+              <Input
+                id="prod-cost"
+                placeholder="1500.00"
+                hasError={!!errors.cost_price}
+                {...register('cost_price')}
+              />
+            </Field>
+          </div>
+
+          <Field label="Notes" htmlFor="prod-notes" error={errors.notes?.message}>
+            <Textarea
+              id="prod-notes"
+              placeholder="Optional internal notes..."
+              hasError={!!errors.notes}
+              {...register('notes')}
+            />
           </Field>
         </form>
       </Dialog>

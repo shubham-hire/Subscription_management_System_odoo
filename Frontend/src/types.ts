@@ -1,15 +1,18 @@
-// ─── Shared types used across the entire application ───
+// ─── Shared types — mirror of the live API wire format (docs/api-contract.md) ───
+// Entities = camelCase (what GET endpoints return). Mutation payloads = snake_case
+// (what our Nest DTOs accept). Money is ALWAYS a 2-decimal string (D4).
 
 export type Role = 'admin' | 'staff' | 'customer';
 
 export interface User {
-  id: string;
-  email: string;
+  id: number;
   name: string;
+  email: string;
   role: Role;
+  isActive: boolean;
   /** Portal users link to a customer record — object-level auth (D8) */
-  customer_id?: string | null;
-  is_active?: boolean;
+  customerId: number | null;
+  createdAt?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -46,112 +49,181 @@ export interface SignupPayload {
 }
 
 export interface AuthResponse {
-  access_token: string;
-  user: User;
+  token: string;
+  user: {
+    id: number;
+    role: Role;
+    customerId: number | null;
+  };
 }
 
-// ─── Catalog Domain Types ───
+// ─── Catalog ────────────────────────────────────────────────────────────────
 
 export interface ProductVariant {
-  id: string;
-  product_id: string;
+  id: number;
+  productId: number;
   attribute: string; // e.g. "Brand"
   value: string; // e.g. "Odoo"
-  price_extra: string; // e.g. "560.00"
+  priceExtra: string; // e.g. "560.00"
 }
 
 export interface Product {
-  id: string;
+  id: number;
   name: string;
-  description: string;
-  status: 'active' | 'closed';
-  /** Effective unit price = sales_price + selected variant price_extra (PRD-03) */
-  sales_price?: string;
-  cost_price?: string;
-  tax_id?: string | null;
-  variants?: ProductVariant[];
-  created_at: string;
+  type: string;
+  salesPrice: string;
+  costPrice: string;
+  notes: string | null;
+  taxId: number | null;
+  isActive: boolean;
+  variants: ProductVariant[];
+  tax?: { id: number; name: string; percentage: string; isActive: boolean } | null;
 }
 
 export interface Plan {
-  id: string;
-  product_id: string;
-  product_name?: string;
+  id: number;
   name: string;
-  billing_interval: 'day' | 'week' | 'month' | 'year';
-  interval_count: number;
-  /** Informational — totals compute from subscription lines (D2) */
+  price: string; // informational — totals compute from lines (D2)
+  billingPeriod: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  minQuantity: number;
+  availableFrom: string;
+  availableTo: string;
+  autoClose: boolean;
+  closable: boolean;
+  pausable: boolean;
+  renewable: boolean;
+  isActive: boolean;
+}
+
+export interface Tax {
+  id: number;
+  name: string;
+  percentage: string;
+  isActive: boolean;
+}
+
+export interface Discount {
+  id: number;
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: string;
+  minPurchase: string;
+  minQuantity: number;
+  startDate: string;
+  endDate: string;
+  maxUses: number; // 0 = unlimited
+  timesUsed: number;
+  scope: 'product' | 'subscription';
+  isActive: boolean;
+  products?: { discountId: number; productId: number }[];
+}
+
+// ─── Catalog mutation payloads (snake_case — matches the Nest DTOs) ─────────
+
+export interface CreateProductPayload {
+  name: string;
+  type: string;
+  sales_price: string;
+  cost_price: string;
+  notes?: string | undefined;
+  tax_id?: number | undefined;
+  variants?: { attribute: string; value: string; price_extra: string }[];
+}
+export type UpdateProductPayload = Partial<CreateProductPayload> & { sales_price?: string };
+
+export interface CreatePlanPayload {
+  name: string;
   price: string;
-  trial_days: number;
-  min_quantity?: number;
+  billing_period: Plan['billingPeriod'];
+  min_quantity: number;
+  available_from: string;
+  available_to: string;
   auto_close?: boolean;
   closable?: boolean;
   pausable?: boolean;
   renewable?: boolean;
-  available_from?: string | null;
-  available_to?: string | null;
-  status: 'active' | 'paused' | 'closed';
-  created_at: string;
 }
-
-export interface Tax {
-  id: string;
-  name: string;
-  rate: string; // e.g. "18.00"
-  is_inclusive: boolean;
-  status: 'active' | 'closed';
-  created_at: string;
-}
-
-export interface Discount {
-  id: string;
-  code: string;
-  name: string;
-  type: 'percentage' | 'fixed';
-  value: string; // e.g. "20.00" or "500.00"
-  /** 'subscription' = whole subscription (pro-rata), 'product' = specific products */
-  scope?: 'product' | 'subscription';
-  product_ids?: string[];
-  min_purchase?: string;
-  min_quantity?: number;
-  start_date?: string | null;
-  end_date?: string | null;
-  max_uses?: number | null;
-  times_used?: number;
-  status: 'active' | 'closed';
-  created_at: string;
-}
-
-// ─── Catalog Mutation Payloads ───
-
-export type CreateProductPayload = Omit<Product, 'id' | 'created_at'>;
-export type UpdateProductPayload = Partial<CreateProductPayload>;
-
-export type CreatePlanPayload = Omit<Plan, 'id' | 'created_at' | 'product_name'>;
 export type UpdatePlanPayload = Partial<CreatePlanPayload>;
 
-export type CreateTaxPayload = Omit<Tax, 'id' | 'created_at'>;
+export interface CreateTaxPayload {
+  name: string;
+  percentage: number;
+  is_active?: boolean;
+}
 export type UpdateTaxPayload = Partial<CreateTaxPayload>;
 
-export type CreateDiscountPayload = Omit<Discount, 'id' | 'created_at'>;
+export interface CreateDiscountPayload {
+  name: string;
+  type: 'percentage' | 'fixed';
+  value: string;
+  min_purchase?: string;
+  min_quantity?: number;
+  start_date: string;
+  end_date: string;
+  max_uses?: number;
+  scope: 'product' | 'subscription';
+  product_ids?: number[];
+  is_active?: boolean;
+}
 export type UpdateDiscountPayload = Partial<CreateDiscountPayload>;
 
-// ─── Customers ───
+// ─── Customers ──────────────────────────────────────────────────────────────
+
+export interface CustomerInvoiceSummary {
+  id: number;
+  number: string;
+  status: 'draft' | 'confirmed' | 'paid' | 'cancelled';
+  total: string;
+  amountPaid: string;
+}
+
+export interface CustomerSubscriptionSummary {
+  id: number;
+  number: string;
+  status: 'draft' | 'quotation' | 'confirmed' | 'active' | 'paused' | 'closed';
+  startDate: string;
+  expiryDate: string;
+}
 
 export interface Customer {
-  id: string;
+  id: number;
   name: string;
-  company?: string;
+  company: string | null;
   email: string;
+  phone: string | null;
+  billingAddress: string | null;
+  taxId: string | null;
+  /** present on GET /customers/:id (CUS-03) */
+  subscriptions?: CustomerSubscriptionSummary[];
+  invoices?: CustomerInvoiceSummary[];
+  outstanding?: string;
+}
+
+export interface CreateCustomerPayload {
+  name: string;
+  email: string;
+  company?: string;
   phone?: string;
   billing_address?: string;
   tax_id?: string;
-  created_at: string;
+}
+export type UpdateCustomerPayload = Partial<CreateCustomerPayload>;
+
+// ─── Users (admin) ──────────────────────────────────────────────────────────
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  password: string;
+  role?: 'staff' | 'admin';
 }
 
-export type CreateCustomerPayload = Omit<Customer, 'id' | 'created_at'>;
+export interface UpdateUserPayload {
+  name?: string;
+  is_active?: boolean;
+}
 
-// ─── Subscriptions ───
+// ─── Subscriptions ──────────────────────────────────────────────────────────
 
 export type SubscriptionStatus =
   | 'draft'
@@ -161,6 +233,7 @@ export type SubscriptionStatus =
   | 'paused'
   | 'closed';
 
+/** UX labels for payment terms — mapped to days in the payload builder. */
 export type PaymentTerms = 'immediate' | 'net_15' | 'net_30';
 
 export const PAYMENT_TERMS_DAYS: Record<PaymentTerms, number> = {
@@ -170,127 +243,131 @@ export const PAYMENT_TERMS_DAYS: Record<PaymentTerms, number> = {
 };
 
 export interface SubscriptionLine {
-  id: string;
-  product_id: string;
-  product_name?: string;
-  variant_id?: string | null;
-  variant_label?: string;
+  id: number;
+  productId: number;
+  variantId: number | null;
   quantity: number;
-  unit_price: string; // product sales_price + variant extra
-  tax_id?: string | null;
+  unitPrice: string; // product salesPrice + variant extra
+  taxId: number | null;
+  /** present on detail endpoints — used to render the variant label */
+  product?: { id: number; name: string; type: string; variants?: ProductVariant[] };
 }
 
 export interface StatusHistoryEntry {
-  id: string;
-  from_status: SubscriptionStatus | null;
-  to_status: SubscriptionStatus;
-  changed_by: string;
-  changed_at: string;
+  id: number;
+  subscriptionId: number;
+  fromStatus: SubscriptionStatus;
+  toStatus: SubscriptionStatus;
+  changedBy: number | null;
+  changedAt: string;
 }
 
 export interface Subscription {
-  id: string;
+  id: number;
   number: string; // SUB-000123
-  customer_id: string;
-  customer_name?: string;
-  plan_id: string;
-  plan_name?: string;
+  customerId: number;
+  planId: number;
   status: SubscriptionStatus;
-  start_date: string;
-  expiry_date: string; // start + 1 billing period (D3)
-  next_billing_date: string;
-  payment_terms: PaymentTerms;
+  startDate: string;
+  expiryDate: string; // start + 1 billing period (D3)
+  nextBillingDate: string;
+  paymentTermsDays: number;
+  createdBy: number | null;
   lines: SubscriptionLine[];
-  history: StatusHistoryEntry[];
-  quotation_expires_at?: string | null;
-  created_at: string;
+  /** present on list + detail endpoints */
+  plan?: Plan;
+  customer?: { id: number; name: string; company: string | null; email: string };
+  history?: StatusHistoryEntry[];
+  /** staff detail also carries related invoices */
+  invoices?: { id: number; number: string; status: 'draft' | 'confirmed' | 'paid' | 'cancelled'; total: string }[];
 }
 
 export interface CreateSubscriptionPayload {
-  customer_id: string;
-  plan_id: string;
+  customer_id: number;
+  plan_id: number;
   start_date: string;
-  payment_terms: PaymentTerms;
+  payment_terms_days?: number;
   lines: Array<{
-    product_id: string;
-    variant_id?: string | null;
+    product_id: number;
+    variant_id?: number | null;
     quantity: number;
-    tax_id?: string | null;
+    tax_id?: number | null;
   }>;
 }
 
-export type SubscriptionAction =
-  | 'confirm'
-  | 'activate'
-  | 'pause'
-  | 'resume'
-  | 'close'
-  | 'renew';
+export type SubscriptionAction = 'quotation' | 'confirm' | 'activate' | 'pause' | 'resume' | 'close';
 
-// ─── Invoices ───
+// ─── Invoices ───────────────────────────────────────────────────────────────
 
 export type InvoiceStatus = 'draft' | 'confirmed' | 'paid' | 'cancelled';
 
 export interface InvoiceLine {
-  id: string;
-  product_id: string;
+  id: number;
+  invoiceId: number;
+  productId: number | null;
   description: string;
   quantity: number;
-  unit_price: string;
-  discount_amount: string;
-  discount_name?: string;
-  tax_rate: string;
-  tax_amount: string;
-  line_total: string; // subtotal - discount + tax
+  unitPrice: string;
+  discountAmount: string;
+  discountName: string | null;
+  taxAmount: string;
+  lineTotal: string;
+}
+
+export interface InvoicePayment {
+  id: number;
+  invoiceId: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque';
+  amount: string;
+  paymentDate: string;
+  note: string | null;
+  recordedBy: number | null;
 }
 
 export interface Invoice {
-  id: string;
+  id: number;
   number: string; // INV-000123
-  subscription_id: string;
-  subscription_number?: string;
-  customer_id: string;
-  customer_name?: string;
+  subscriptionId: number;
+  customerId: number;
   status: InvoiceStatus;
-  period_start: string;
-  period_end: string;
-  issue_date: string;
-  due_date: string;
+  periodStart: string;
+  periodEnd: string;
+  issueDate: string;
+  dueDate: string;
   subtotal: string;
-  discount_total: string;
-  tax_total: string;
+  discountTotal: string;
+  taxTotal: string;
   total: string;
-  amount_paid: string;
+  amountPaid: string;
+  /** computed server-side (D5) */
+  overdue?: boolean;
   lines: InvoiceLine[];
-}
-
-export interface Payment {
-  id: string;
-  invoice_id: string;
-  invoice_number?: string;
-  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque';
-  amount: string;
-  payment_date: string;
-  note?: string;
-  recorded_by: string;
+  /** present on detail endpoints */
+  payments?: InvoicePayment[];
+  customer?: { id: number; name: string; company: string | null; email: string };
+  subscription?: { id: number; number: string };
 }
 
 export interface RecordPaymentPayload {
-  method: Payment['method'];
+  method: InvoicePayment['method'];
   amount: string;
-  payment_date: string;
+  date: string;
   note?: string;
 }
 
 export interface BillingRunSummary {
+  status?: 'ok' | 'already_running';
+  run_id: number | null;
   created: number;
   skipped: number;
   failed: number;
-  invoice_numbers: string[];
+  activated: number;
+  auto_closed: number;
 }
 
-// ─── Reports ───
+// ─── Reports ────────────────────────────────────────────────────────────────
 
+/** GET /reports/summary — snake_case as the API returns it */
 export interface ReportSummary {
   active_subscriptions: number;
   revenue_collected: string;
@@ -299,8 +376,33 @@ export interface ReportSummary {
   overdue_amount: string;
 }
 
-export interface OverdueInvoice extends Invoice {
+/** GET /reports/overdue item — snake_case fields as returned */
+export interface OverdueInvoice {
+  id: number;
+  number: string;
+  customer: { id: number; name: string; company: string | null; email: string; phone: string | null };
+  subscription_number: string | null;
+  total: string;
+  amount_paid: string;
+  balance: string;
+  due_date: string;
   days_overdue: number;
-  customer_email?: string;
-  customer_phone?: string;
+  overdue: boolean;
+}
+
+/** GET /payments item */
+export interface Payment {
+  id: number;
+  invoiceId: number;
+  method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'cheque';
+  amount: string;
+  paymentDate: string;
+  note: string | null;
+  recordedBy: number | null;
+  invoice?: {
+    id: number;
+    number: string;
+    customerId: number;
+    customer: { id: number; name: string; company: string | null };
+  };
 }

@@ -84,11 +84,11 @@ export function PortalSubscriptionsPage() {
                       {sub.number}
                     </span>
                     <span className="text-caption text-zinc-500">
-                      Started {formatDate(sub.start_date)}
+                      Started {formatDate(sub.startDate)}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium text-zinc-200">{sub.plan_name ?? '—'}</span>
+                    <span className="font-medium text-zinc-200">{sub.plan?.name ?? '—'}</span>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={sub.status} />
@@ -96,11 +96,11 @@ export function PortalSubscriptionsPage() {
                   <TableCell>
                     <span className="inline-flex items-center gap-1.5 text-zinc-300 tnum">
                       <Calendar className="h-3.5 w-3.5 text-zinc-500" />
-                      {formatDate(sub.next_billing_date)}
+                      {formatDate(sub.nextBillingDate)}
                     </span>
                   </TableCell>
                   <TableCell className="capitalize text-zinc-400">
-                    {sub.payment_terms.replace('_', ' ')}
+                    {sub.paymentTermsDays === 0 ? 'Immediate' : `Net ${sub.paymentTermsDays}`}
                   </TableCell>
                   <TableCell className="text-zinc-400 tnum">
                     {sub.lines.length} {sub.lines.length === 1 ? 'item' : 'items'}

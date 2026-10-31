@@ -35,46 +35,48 @@ export type SignupFormValues = z.infer<typeof signupSchema>;
 
 export const productSchema = z.object({
   name: z.string().min(1, 'Product name is required').max(100, 'Name is too long'),
-  description: z.string().max(500, 'Description is too long'),
-  status: z.enum(['active', 'closed']),
+  type: z.string().min(1, 'Product type is required').max(50, 'Type is too long'),
+  sales_price: z
+    .string()
+    .min(1, 'Sales price is required')
+    .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 2999.00)'),
+  cost_price: z
+    .string()
+    .min(1, 'Cost price is required')
+    .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 1500.00)'),
+  notes: z.string().max(500, 'Notes are too long').optional().or(z.literal('')),
 });
 
 export const planSchema = z.object({
-  product_id: z.string().min(1, 'Select a product'),
   name: z.string().min(1, 'Plan name is required').max(100, 'Name is too long'),
-  billing_interval: z.enum(['day', 'week', 'month', 'year']),
-  interval_count: z.number().int().min(1, 'Must be at least 1'),
   price: z
     .string()
     .min(1, 'Price is required')
     .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 999.00)'),
-  trial_days: z.number().int().min(0, 'Cannot be negative'),
-  status: z.enum(['active', 'paused', 'closed']),
+  billing_period: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  min_quantity: z.number().int().min(1, 'Must be at least 1'),
+  available_from: z.string().min(1, 'Available-from date is required'),
+  available_to: z.string().min(1, 'Available-to date is required'),
 });
 
 export const taxSchema = z.object({
   name: z.string().min(1, 'Tax name is required').max(100, 'Name is too long'),
-  rate: z
-    .string()
-    .min(1, 'Tax rate is required')
-    .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid percentage (e.g. 18.00)'),
-  is_inclusive: z.boolean(),
-  status: z.enum(['active', 'closed']),
+  percentage: z
+    .number()
+    .min(0, 'Cannot be negative')
+    .max(100, 'Cannot exceed 100'),
 });
 
 export const discountSchema = z.object({
-  code: z
-    .string()
-    .min(2, 'Code must be at least 2 characters')
-    .max(30, 'Code is too long')
-    .regex(/^[A-Z0-9_-]+$/, 'Uppercase letters, numbers, and dashes only'),
   name: z.string().min(1, 'Discount name is required').max(100, 'Name is too long'),
   type: z.enum(['percentage', 'fixed']),
   value: z
     .string()
     .min(1, 'Value is required')
     .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid number (e.g. 20.00 or 500.00)'),
-  status: z.enum(['active', 'closed']),
+  scope: z.enum(['product', 'subscription']),
+  start_date: z.string().min(1, 'Start date is required'),
+  end_date: z.string().min(1, 'End date is required'),
 });
 
 
@@ -105,7 +107,7 @@ export const paymentSchema = z.object({
     .string()
     .min(1, 'Amount is required')
     .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 1500.00)'),
-  payment_date: z.string().min(1, 'Payment date is required'),
+  date: z.string().min(1, 'Payment date is required'),
   note: z.string().max(250, 'Note is too long').optional().or(z.literal('')),
 });
 

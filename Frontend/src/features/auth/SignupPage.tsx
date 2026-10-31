@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { signupSchema, type SignupFormValues, PASSWORD_RULES } from '@/lib/schemas';
-import { signup, persistToken } from '@/api/auth';
+import { signup, persistToken, getMe } from '@/api/auth';
 import { useAuth } from '@/features/auth/AuthContext';
 import { ApiError } from '@/api/client';
 import { Button, Field, Input } from '@/components/ui';
@@ -35,8 +35,9 @@ export function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     try {
       const res = await signup(data);
-      persistToken(res.access_token);
-      setUser(res.user);
+      persistToken(res.token);
+      const me = await getMe();
+      setUser(me);
       navigate('/portal', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {

@@ -13,9 +13,10 @@ import { SalesModule } from './sales/sales.module';
 import { BillingModule } from './billing/billing.module';
 import { ReportsModule } from './reports/reports.module';
 import { CustomersModule } from './customers/customers.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CatalogModule, InvoicesModule, PortalModule, SalesModule, BillingModule, ReportsModule, CustomersModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, CatalogModule, InvoicesModule, PortalModule, SalesModule, BillingModule, ReportsModule, CustomersModule, UsersModule],
   controllers: [AppController],
   providers: [
     // Order matters: JwtAuthGuard authenticates (req.user), RolesGuard authorizes

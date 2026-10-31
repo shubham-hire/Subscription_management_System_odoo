@@ -48,17 +48,17 @@ export function DiscountsPage() {
     handleSubmit,
     reset,
     watch,
-    setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<DiscountFormValues>({
     resolver: zodResolver(discountSchema),
     defaultValues: {
-      code: '',
       name: '',
       type: 'percentage',
       value: '',
-      status: 'active',
+      scope: 'product',
+      start_date: 'new Date().toISOString().slice(0, 10)',
+      end_date: 'new Date().toISOString().slice(0, 10)',
     },
   });
 
@@ -67,11 +67,12 @@ export function DiscountsPage() {
   const openCreateDialog = () => {
     setSelectedDiscount(null);
     reset({
-      code: '',
       name: '',
       type: 'percentage',
       value: '',
-      status: 'active',
+      scope: 'product',
+      start_date: 'new Date().toISOString().slice(0, 10)',
+      end_date: 'new Date().toISOString().slice(0, 10)',
     });
     setDialogMode('create');
   };
@@ -79,11 +80,12 @@ export function DiscountsPage() {
   const openEditDialog = (discount: Discount) => {
     setSelectedDiscount(discount);
     reset({
-      code: discount.code,
       name: discount.name,
       type: discount.type,
       value: discount.value,
-      status: discount.status,
+      scope: discount.scope,
+      start_date: discount.startDate.slice(0, 10),
+      end_date: discount.endDate.slice(0, 10),
     });
     setDialogMode('edit');
   };
@@ -113,7 +115,7 @@ export function DiscountsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: DiscountFormValues }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: DiscountFormValues }) =>
       updateDiscount(id, payload),
     onSuccess: () => {
       toast('success', 'Discount updated successfully.');
@@ -132,14 +134,10 @@ export function DiscountsPage() {
   });
 
   const onSubmit = async (values: DiscountFormValues) => {
-    const formattedValues = {
-      ...values,
-      code: values.code.toUpperCase(),
-    };
     if (dialogMode === 'create') {
-      await createMutation.mutateAsync(formattedValues);
+      await createMutation.mutateAsync(values);
     } else if (dialogMode === 'edit' && selectedDiscount) {
-      await updateMutation.mutateAsync({ id: selectedDiscount.id, payload: formattedValues });
+      await updateMutation.mutateAsync({ id: selectedDiscount.id, payload: values });
     }
   };
 
@@ -162,7 +160,7 @@ export function DiscountsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableHeader>Coupon Code</TableHeader>
+              <TableHeader>Validity</TableHeader>
               <TableHeader>Campaign Name</TableHeader>
               <TableHeader>Type</TableHeader>
               <TableHeader>Value</TableHeader>
@@ -193,7 +191,7 @@ export function DiscountsPage() {
                   <TableCell>
                     <span className="inline-flex items-center gap-1.5 font-mono text-caption font-semibold px-2.5 py-1 rounded bg-gray-100 text-gray-800 border border-gray-200">
                       <Tag className="h-3 w-3 text-gray-500" />
-                      {discount.code}
+                      {discount.name}
                     </span>
                   </TableCell>
                   <TableCell className="font-medium text-gray-900">{discount.name}</TableCell>
@@ -206,21 +204,17 @@ export function DiscountsPage() {
                       : `${formatMoney(discount.value)} OFF`}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={discount.status} />
+                    <StatusBadge status={discount.isActive ? 'active' : 'closed'} />
                   </TableCell>
                   <TableCell className="text-gray-500">
-                    {new Date(discount.created_at).toLocaleDateString('en-IN', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    {discount.startDate.slice(0, 10)} → {discount.endDate.slice(0, 10)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => openEditDialog(discount)}
-                      aria-label={`Edit ${discount.code}`}
+                      aria-label={`Edit ${discount.name}`}
                     >
                       <Edit2 className="h-4 w-4" />
                       <span className="hidden sm:inline">Edit</span>
@@ -264,16 +258,31 @@ export function DiscountsPage() {
         }
       >
         <form id="discount-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          <Field label="Coupon Code" htmlFor="disc-code" error={errors.code?.message}>
-            <Input
-              id="disc-code"
-              placeholder="e.g. SUMMER25"
-              hasError={!!errors.code}
-              {...register('code')}
-              onChange={(e) => {
-                setValue('code', e.target.value.toUpperCase());
-              }}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Start Date" htmlFor="disc-start" error={errors.start_date?.message}>
+              <Input
+                id="disc-start"
+                type="date"
+                hasError={!!errors.start_date}
+                {...register('start_date')}
+              />
+            </Field>
+
+            <Field label="End Date" htmlFor="disc-end" error={errors.end_date?.message}>
+              <Input
+                id="disc-end"
+                type="date"
+                hasError={!!errors.end_date}
+                {...register('end_date')}
+              />
+            </Field>
+          </div>
+
+          <Field label="Applies To" htmlFor="disc-scope" error={errors.scope?.message}>
+            <Select id="disc-scope" hasError={!!errors.scope} {...register('scope')}>
+              <option value="product">Specific Products</option>
+              <option value="subscription">Whole Subscription</option>
+            </Select>
           </Field>
 
           <Field label="Discount Name / Description" htmlFor="disc-name" error={errors.name?.message}>
@@ -307,12 +316,7 @@ export function DiscountsPage() {
             </Field>
           </div>
 
-          <Field label="Status" htmlFor="disc-status" error={errors.status?.message}>
-            <Select id="disc-status" hasError={!!errors.status} {...register('status')}>
-              <option value="active">Active</option>
-              <option value="closed">Closed</option>
-            </Select>
-          </Field>
+
         </form>
       </Dialog>
     </div>

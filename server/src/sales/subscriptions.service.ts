@@ -8,7 +8,11 @@ import { CreateSubscriptionDto, ListQueryDto, SubscriptionLineDto, UpdateLinesDt
 const INCLUDE = {
   plan: true,
   customer: { select: { id: true, name: true, company: true, email: true } },
-  lines: { include: { product: { select: { id: true, name: true, type: true } } } },
+  lines: {
+    include: {
+      product: { select: { id: true, name: true, type: true, variants: true } },
+    },
+  },
 } satisfies Prisma.SubscriptionInclude;
 
 @Injectable()

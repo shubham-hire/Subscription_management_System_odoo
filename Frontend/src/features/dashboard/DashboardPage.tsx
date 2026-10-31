@@ -19,7 +19,8 @@ export function DashboardPage() {
   const overdueQuery = useQuery({ queryKey: ['reports', 'overdue'], queryFn: getOverdueInvoices });
 
   const summary = summaryQuery.data;
-  const overdue = overdueQuery.data ?? [];
+  const overdue = overdueQuery.data?.items ?? [];
+  const overdueTotal = overdueQuery.data?.total ?? 0;
 
   return (
     <div>
@@ -131,7 +132,7 @@ export function DashboardPage() {
                       </Link>
                       <div className="text-caption text-zinc-600">{inv.subscription_number}</div>
                     </td>
-                    <td className="px-4 py-3 text-zinc-200">{inv.customer_name}</td>
+                    <td className="px-4 py-3 text-zinc-200">{inv.customer?.name}</td>
                     <td className="px-4 py-3 text-zinc-400">{formatDate(inv.due_date)}</td>
                     <td className="px-4 py-3 font-medium text-zinc-100">
                       {formatMoney(invoiceBalance(inv))}
@@ -143,14 +144,14 @@ export function DashboardPage() {
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex flex-col gap-0.5 text-caption text-zinc-500">
-                        {inv.customer_email && (
+                        {inv.customer?.email && (
                           <span className="inline-flex items-center gap-1.5">
-                            <Mail className="h-3 w-3" /> {inv.customer_email}
+                            <Mail className="h-3 w-3" /> {inv.customer?.email}
                           </span>
                         )}
-                        {inv.customer_phone && (
+                        {inv.customer?.phone && (
                           <span className="inline-flex items-center gap-1.5">
-                            <Phone className="h-3 w-3" /> {inv.customer_phone}
+                            <Phone className="h-3 w-3" /> {inv.customer?.phone}
                           </span>
                         )}
                       </div>
@@ -159,9 +160,9 @@ export function DashboardPage() {
                 ))}
               </tbody>
             </table>
-            {overdue.length > 10 && (
+            {overdueTotal > overdue.length && (
               <div className="px-6 py-3 border-t border-white/[0.06] text-caption text-zinc-500">
-                Showing top 10 of {overdue.length} overdue invoices
+                Showing top {overdue.length} of {overdueTotal} overdue invoices
               </div>
             )}
           </div>

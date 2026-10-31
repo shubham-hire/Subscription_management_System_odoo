@@ -555,7 +555,7 @@ describe('reports edge cases', () => {
     });
 
     const overdue = await api().get('/reports/overdue').set('Authorization', `Bearer ${staffToken}`);
-    expect(overdue.body.map((i: { number: string }) => i.number)).not.toContain('INV-950002');
+    expect(overdue.body.items.map((i: { number: string }) => i.number)).not.toContain('INV-950002');
 
     const list = await api().get('/invoices?overdue=true&page_size=100').set('Authorization', `Bearer ${staffToken}`);
     expect(list.body.items.map((i: { number: string }) => i.number)).not.toContain('INV-950002');
@@ -583,6 +583,7 @@ describe('empty-state reports', () => {
 
   it('overdue list is empty', async () => {
     const res = await api().get('/reports/overdue').set('Authorization', `Bearer ${adminToken}`);
-    expect(res.body).toEqual([]);
+    expect(res.body.items).toEqual([]);
+    expect(res.body.total).toBe(0);
   });
 });

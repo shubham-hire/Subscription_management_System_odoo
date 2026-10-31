@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Edit2 } from 'lucide-react';
-import { getPlans, getProducts, createPlan, updatePlan } from '@/api/catalog';
+import { getPlans, createPlan, updatePlan } from '@/api/catalog';
 import { ApiError } from '@/api/client';
 import { planSchema, type PlanFormValues } from '@/lib/schemas';
 import { formatMoney } from '@/lib/money';
@@ -44,11 +44,6 @@ export function PlansPage() {
     queryFn: () => getPlans({ page, page_size: pageSize }),
   });
 
-  // Fetch products for dropdown
-  const { data: productsData } = useQuery({
-    queryKey: ['products-all'],
-    queryFn: () => getProducts({ page: 1, page_size: 100 }),
-  });
 
   const {
     register,
@@ -59,27 +54,24 @@ export function PlansPage() {
   } = useForm<PlanFormValues>({
     resolver: zodResolver(planSchema),
     defaultValues: {
-      product_id: '',
       name: '',
-      billing_interval: 'month',
-      interval_count: 1,
       price: '',
-      trial_days: 0,
-      status: 'active',
+      billing_period: 'monthly',
+      min_quantity: 1,
+      available_from: 'new Date().toISOString().slice(0, 10)',
+      available_to: 'new Date().toISOString().slice(0, 10)',
     },
   });
 
   const openCreateDialog = () => {
     setSelectedPlan(null);
-    const defaultProductId = productsData?.items[0]?.id || '';
     reset({
-      product_id: defaultProductId,
       name: '',
-      billing_interval: 'month',
-      interval_count: 1,
       price: '',
-      trial_days: 0,
-      status: 'active',
+      billing_period: 'monthly',
+      min_quantity: 1,
+      available_from: 'new Date().toISOString().slice(0, 10)',
+      available_to: 'new Date().toISOString().slice(0, 10)',
     });
     setDialogMode('create');
   };
@@ -87,13 +79,12 @@ export function PlansPage() {
   const openEditDialog = (plan: Plan) => {
     setSelectedPlan(plan);
     reset({
-      product_id: plan.product_id,
       name: plan.name,
-      billing_interval: plan.billing_interval,
-      interval_count: plan.interval_count,
       price: plan.price,
-      trial_days: plan.trial_days,
-      status: plan.status,
+      billing_period: plan.billingPeriod,
+      min_quantity: plan.minQuantity,
+      available_from: plan.availableFrom.slice(0, 10),
+      available_to: plan.availableTo.slice(0, 10),
     });
     setDialogMode('edit');
   };
@@ -123,7 +114,7 @@ export function PlansPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: PlanFormValues }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: PlanFormValues }) =>
       updatePlan(id, payload),
     onSuccess: () => {
       toast('success', 'Plan updated successfully.');
@@ -197,19 +188,18 @@ export function PlansPage() {
               {plansData.items.map((plan) => (
                 <TableRow key={plan.id}>
                   <TableCell className="font-medium text-gray-900">{plan.name}</TableCell>
-                  <TableCell className="text-gray-600">{plan.product_name || '—'}</TableCell>
+                  <TableCell className="text-gray-600">Min {plan.minQuantity} seat(s)</TableCell>
                   <TableCell className="text-gray-600 capitalize">
-                    {plan.interval_count > 1 ? `Every ${plan.interval_count} ` : 'Every '}
-                    {plan.billing_interval}
+                    {plan.billingPeriod}
                   </TableCell>
                   <TableCell className="font-medium text-gray-900">
                     {formatMoney(plan.price)}
                   </TableCell>
-                  <TableCell className="text-gray-500">
-                    {plan.trial_days > 0 ? `${plan.trial_days} days` : 'None'}
+                  <TableCell className="text-gray-500 text-caption">
+                    {plan.availableFrom.slice(0, 10)} → {plan.availableTo.slice(0, 10)}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={plan.status} />
+                    <StatusBadge status={plan.isActive ? 'active' : 'closed'} />
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -260,17 +250,6 @@ export function PlansPage() {
         }
       >
         <form id="plan-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          <Field label="Target Product" htmlFor="plan-product" error={errors.product_id?.message}>
-            <Select id="plan-product" hasError={!!errors.product_id} {...register('product_id')}>
-              <option value="">Select product...</option>
-              {productsData?.items.map((prod) => (
-                <option key={prod.id} value={prod.id}>
-                  {prod.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
           <Field label="Plan Name" htmlFor="plan-name" error={errors.name?.message}>
             <Input
               id="plan-name"
@@ -281,21 +260,22 @@ export function PlansPage() {
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Billing Interval" htmlFor="plan-interval" error={errors.billing_interval?.message}>
-              <Select id="plan-interval" hasError={!!errors.billing_interval} {...register('billing_interval')}>
-                <option value="month">Month</option>
-                <option value="year">Year</option>
-                <option value="week">Week</option>
+            <Field label="Billing Period" htmlFor="plan-interval" error={errors.billing_period?.message}>
+              <Select id="plan-interval" hasError={!!errors.billing_period} {...register('billing_period')}>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+                <option value="weekly">Weekly</option>
+                <option value="daily">Daily</option>
               </Select>
             </Field>
 
-            <Field label="Interval Count" htmlFor="plan-count" error={errors.interval_count?.message}>
+            <Field label="Minimum Quantity" htmlFor="plan-count" error={errors.min_quantity?.message}>
               <Input
                 id="plan-count"
                 type="number"
                 min="1"
-                hasError={!!errors.interval_count}
-                {...register('interval_count', { valueAsNumber: true })}
+                hasError={!!errors.min_quantity}
+                {...register('min_quantity', { valueAsNumber: true })}
               />
             </Field>
           </div>
@@ -310,24 +290,23 @@ export function PlansPage() {
               />
             </Field>
 
-            <Field label="Trial Days" htmlFor="plan-trial" error={errors.trial_days?.message}>
+            <Field label="Available From" htmlFor="plan-from" error={errors.available_from?.message}>
               <Input
-                id="plan-trial"
-                type="number"
-                min="0"
-                placeholder="0"
-                hasError={!!errors.trial_days}
-                {...register('trial_days', { valueAsNumber: true })}
+                id="plan-from"
+                type="date"
+                hasError={!!errors.available_from}
+                {...register('available_from')}
               />
             </Field>
           </div>
 
-          <Field label="Status" htmlFor="plan-status" error={errors.status?.message}>
-            <Select id="plan-status" hasError={!!errors.status} {...register('status')}>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="closed">Closed</option>
-            </Select>
+          <Field label="Available To" htmlFor="plan-to" error={errors.available_to?.message}>
+            <Input
+              id="plan-to"
+              type="date"
+              hasError={!!errors.available_to}
+              {...register('available_to')}
+            />
           </Field>
         </form>
       </Dialog>

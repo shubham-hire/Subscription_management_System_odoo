@@ -53,7 +53,7 @@ export function RecordPaymentModal({
 
   // Compute remaining balance
   const remainingBalance = activeInvoice
-    ? new Decimal(activeInvoice.total).minus(new Decimal(activeInvoice.amount_paid)).toFixed(2)
+    ? new Decimal(activeInvoice.total).minus(new Decimal(activeInvoice.amountPaid)).toFixed(2)
     : '0.00';
 
   // When invoice changes, default the payment amount to full remaining balance
@@ -98,7 +98,7 @@ export function RecordPaymentModal({
     recordMutation.mutate({
       method,
       amount: payVal.toFixed(2),
-      payment_date: paymentDate,
+      date: paymentDate,
       note: note.trim() || undefined,
     });
   };
@@ -123,7 +123,7 @@ export function RecordPaymentModal({
                 {preselectedInvoice.number}
               </span>
               <span className="text-caption text-zinc-400 block">
-                {preselectedInvoice.customer_name}
+                {preselectedInvoice.customer?.name}
               </span>
             </div>
             <div className="text-right">
@@ -144,10 +144,10 @@ export function RecordPaymentModal({
             >
               <option value="">Select confirmed invoice...</option>
               {payableInvoices.map((inv) => {
-                const bal = new Decimal(inv.total).minus(new Decimal(inv.amount_paid)).toFixed(2);
+                const bal = new Decimal(inv.total).minus(new Decimal(inv.amountPaid)).toFixed(2);
                 return (
                   <option key={inv.id} value={inv.id}>
-                    {inv.number} — {inv.customer_name} (Balance: {formatMoney(bal)})
+                    {inv.number} — {inv.customer?.name} (Balance: {formatMoney(bal)})
                   </option>
                 );
               })}

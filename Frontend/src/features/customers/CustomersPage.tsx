@@ -263,16 +263,16 @@ export function CustomersPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {cust.tax_id ? (
+                    {cust.taxId ? (
                       <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-caption font-mono text-zinc-300">
-                        {cust.tax_id}
+                        {cust.taxId}
                       </span>
                     ) : (
                       <span className="text-zinc-600">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-caption text-zinc-400 tnum">
-                    {formatDate(cust.created_at)}
+                    —
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -446,18 +446,18 @@ function CustomerDetailModal({
           <div className="space-y-1">
             <span className="text-caption text-zinc-500 uppercase tracking-wider block">GSTIN / Tax ID</span>
             <span className="text-body font-mono text-primary-300 font-medium">
-              {customer.tax_id || 'Not registered'}
+              {customer.taxId || 'Not registered'}
             </span>
           </div>
 
-          {customer.billing_address && (
+          {customer.billingAddress && (
             <div className="sm:col-span-3 pt-2 border-t border-white/[0.04]">
               <span className="text-caption text-zinc-500 uppercase tracking-wider block mb-1">
                 Billing Address
               </span>
               <p className="text-caption text-zinc-300 flex items-start gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-zinc-400 flex-shrink-0 mt-0.5" />
-                {customer.billing_address}
+                {customer.billingAddress}
               </p>
             </div>
           )}
@@ -487,11 +487,11 @@ function CustomerDetailModal({
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-body font-semibold text-zinc-200">{sub.number}</span>
-                    <span className="text-caption text-zinc-400">{sub.plan_name}</span>
+                    <span className="text-caption text-zinc-400">{sub.plan?.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-caption text-zinc-400 tnum">
-                      Next bill: {formatDate(sub.next_billing_date)}
+                      Next bill: {formatDate(sub.nextBillingDate)}
                     </span>
                     <StatusBadge status={sub.status} />
                   </div>
@@ -525,7 +525,7 @@ function CustomerDetailModal({
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-body font-medium text-zinc-200">{inv.number}</span>
-                    <span className="text-caption text-zinc-500">Due {formatDate(inv.due_date)}</span>
+                    <span className="text-caption text-zinc-500">Due {formatDate(inv.dueDate)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-body font-semibold text-zinc-100 tnum">
