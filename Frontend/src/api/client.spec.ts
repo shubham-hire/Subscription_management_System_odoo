@@ -4,6 +4,7 @@
  * { error: { code, message, fields } } error envelope.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ApiError } from './client';
 
 // browser globals stubbed — the client uses localStorage + window.location
 const store = new Map<string, string>();
@@ -15,7 +16,7 @@ vi.stubGlobal('localStorage', {
 });
 vi.stubGlobal('window', { location: locationStub });
 
-const { apiClient, ApiError, getToken, setToken, clearToken } = await import('./client');
+const { apiClient, ApiError: ApiErrorClass, getToken, setToken, clearToken } = await import('./client');
 const { login, signup, getMe, persistToken } = await import('./auth');
 
 beforeEach(() => {
@@ -100,7 +101,7 @@ describe('apiClient — contract error envelope', () => {
     });
 
     const err = await apiClient('/auth/signup', { method: 'POST', body: '{}' }).catch((e) => e);
-    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toBeInstanceOf(ApiErrorClass);
     expect(err.status).toBe(400);
     expect(err.code).toBe('VALIDATION_ERROR');
     expect(err.message).toBe('Validation failed');
@@ -111,7 +112,7 @@ describe('apiClient — contract error envelope', () => {
     mockFetchOnce({ ok: false, status: 502, statusText: 'Bad Gateway', jsonThrows: true });
 
     const err = (await apiClient('/anything').catch((e) => e)) as ApiError;
-    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toBeInstanceOf(ApiErrorClass);
     expect(err.status).toBe(502);
     expect(err.message).toContain('502');
   });
