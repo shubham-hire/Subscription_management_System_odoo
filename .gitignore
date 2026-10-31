@@ -11,3 +11,4 @@ coverage/
 prisma/migrations/dev/
 *.tsbuildinfo
 .vite/
+.dev-logs/
