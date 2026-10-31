@@ -59,7 +59,7 @@ beforeAll(async () => {
   const product = await prisma.product.create({
     data: { name: 'ERP Software', type: 'software', salesPrice: 1000, costPrice: 500, taxId: tax.id },
   });
-  await prisma.productVariant.create({
+  const variant = await prisma.productVariant.create({
     data: { productId: product.id, attribute: 'Brand', value: 'Odoo', priceExtra: 100 },
   });
   const plan = await prisma.plan.create({
@@ -89,9 +89,9 @@ beforeAll(async () => {
       customer_id: customer.id, plan_id: plan.id,
       start_date: day(-70).toISOString().slice(0, 10),
       payment_terms_days: 0,
-      lines: [{ product_id: product.id, variant_id: 1, quantity: 2 }],
+      lines: [{ product_id: product.id, variant_id: variant.id, quantity: 2 }],
     });
-  expect(sub.status).toBe(201);
+  expect(sub.status, `create: ${JSON.stringify(sub.body)}`).toBe(201);
   subId = sub.body.id;
 
   // lifecycle to active
