@@ -5,9 +5,11 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "db:migrate": "prisma migrate dev",
+    "test": "vitest run src/common src/auth/auth.dto.spec.ts src/payments",
+    "test:domain": "vitest run src/domain",
+    "test:integration": "sh test/reset-test-db.sh && vitest run --config vitest.integration.config.ts",
+    "test:all": "sh test/reset-test-db.sh && vitest run && vitest run --config vitest.integration.config.ts",
+    "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force && prisma db seed"
   },
@@ -31,11 +33,16 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
+    "@nestjs/testing": "^11.2.8",
+    "@swc/core": "^1.16.21",
     "@types/node": "^22.10.0",
     "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^7.2.1",
     "prisma": "^6.3.0",
+    "supertest": "^7.3.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3",
+    "unplugin-swc": "^2.0.0",
     "vitest": "^3.0.0"
   }
 }

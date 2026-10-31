@@ -13,20 +13,21 @@ const MONEY_RE = /^-?\d+(\.\d+)?$/;
 @Injectable()
 export class MoneyFormatInterceptor implements NestInterceptor {
   intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    return next.handle().pipe(map((data) => normalize(data)));
+    return next.handle().pipe(map((data) => normalizeMoney(data)));
   }
 }
 
-function normalize(value: unknown): unknown {
+/** Exported for unit tests — see money-format.interceptor.spec.ts */
+export function normalizeMoney(value: unknown): unknown {
   // Prisma ships its own decimal.js bundle — instanceof fails across copies,
   // so duck-type the Decimal shape (s/e/d internals + toFixed).
   if (isDecimalLike(value)) return (value as { toFixed(f?: number): string }).toFixed(2);
-  if (Array.isArray(value)) return value.map(normalize);
+  if (Array.isArray(value)) return value.map(normalizeMoney);
   if (value instanceof Date) return value;
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = normalize(v);
+      out[k] = normalizeMoney(v);
     }
     return out;
   }

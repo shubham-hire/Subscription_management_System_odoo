@@ -48,6 +48,19 @@ npm run dev                # http://localhost:5173
 - [docs/demo-script.md](docs/demo-script.md) — 6-minute demo order
 - [Plan.md](Plan.md) — team plan · [Plan-DevA.md](Plan-DevA.md) — Dev A runbook
 
+## Tests
+
+```bash
+cd server
+npm test                 # unit (36) — money format, validation, password rules, overdue logic
+npm run test:domain      # Dev B's pure billing/state-machine tests (red until implemented)
+npm run test:integration # Supertest suite (26) — real API vs disposable brightloop_test DB
+npm run test:all         # everything
+```
+
+Integration tests boot the real Nest app (guards, pipes, filters, interceptor) against
+`brightloop_test` (recreated each run) — the demo DB is never touched.
+
 ## Reset everything
 
 ```bash

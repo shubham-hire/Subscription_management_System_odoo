@@ -43,6 +43,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       // compiles before `prisma generate` has run.
       status = HttpStatus.CONFLICT;
       body = { code: 'CONFLICT', message: 'A record with this value already exists' };
+    } else {
+      // Unhandled: log the full exception — these must never be silent.
+      console.error('[unhandled]', exception);
     }
 
     res.status(status).json({ error: body });
