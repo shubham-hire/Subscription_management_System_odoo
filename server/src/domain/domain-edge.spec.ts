@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { addPeriod } from './billing-dates';
 import { computeInvoiceTotals, computeLine } from './pricing';
-import { validateTransition } from './transitions';
+import { SUBSCRIPTION_TRANSITIONS, validateTransition } from './transitions';
 
 const d = (s: string) => new Date(s);
 const iso = (x: Date) => x.toISOString().slice(0, 10);
@@ -144,5 +144,23 @@ describe('validateTransition — boundary cases', () => {
     expect(
       validateTransition({ from: 'closed', to: 'active', plan: { ...plan, renewable: false } }),
     ).not.toBeNull();
+  });
+});
+
+describe('SUBSCRIPTION_TRANSITIONS — map integrity', () => {
+  const ALL = ['draft', 'quotation', 'confirmed', 'active', 'paused', 'closed'] as const;
+
+  it('has an entry for every status and only refers to known statuses', () => {
+    for (const status of ALL) {
+      expect(SUBSCRIPTION_TRANSITIONS[status]).toBeDefined();
+    }
+    for (const [from, targets] of Object.entries(SUBSCRIPTION_TRANSITIONS)) {
+      expect(ALL).toContain(from);
+      for (const to of targets) expect(ALL).toContain(to);
+    }
+  });
+
+  it('never allows the draft state to jump past quotation', () => {
+    expect(SUBSCRIPTION_TRANSITIONS.draft).toEqual(['quotation']);
   });
 });

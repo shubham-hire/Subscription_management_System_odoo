@@ -56,14 +56,17 @@ This is a modular monolith (NestJS + PostgreSQL) chosen deliberately: at 3 devs 
 
 ## Tests
 
+**190 automated tests** across the whole system (51 server unit · 70 domain logic · 94 API integration · 9 frontend client).
+
 ```bash
 cd server
-npm test                 # unit (36) — money format, validation, password rules, overdue logic
-npm run test:domain      # pure billing/state-machine tests (46) — calendar edges, rounding, transitions
-npm run test:integration # Supertest suites (69) — real API vs disposable brightloop_test DB,
+npm test                 # server unit (51) — error filter, money format, validation, password rules, overdue logic
+npm run test:domain      # pure billing/state-machine tests (70) — calendar edges, rounding, transitions
+npm run test:integration # Supertest suites (94) — real API vs disposable brightloop_test DB,
                          #   incl. edge cases: input normalization, token expiry, validation bounds,
                          #   lifecycle boundaries, discount caps, auto-close ordering, crash recovery
 npm run test:all         # everything
+cd web && npm test       # frontend API-client contract tests (9)
 ```
 
 Integration tests boot the real Nest app (guards, pipes, filters, interceptor) against
