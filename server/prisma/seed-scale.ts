@@ -9,8 +9,8 @@ import { PrismaClient, SubscriptionStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const SUBS = 500;
-const CUSTOMERS = 450;
+const SUBS = Number(process.env.SCALE ?? 500); // SCALE=5000 proves the PRD's 5k claim
+const CUSTOMERS = Math.round(Number(process.env.SCALE ?? 500) * 0.9);
 const FIXTURE_SUB = 'SUB-000001';
 
 const nextNumber = (prefix: string, n: number) => `${prefix}-${String(n).padStart(6, '0')}`;
@@ -63,13 +63,14 @@ async function main() {
   const plan = await prisma.plan.findFirstOrThrow({ select: { id: true, minQuantity: true } });
 
   // ── Subscriptions: realistic status mix, explicit numbers ──
+  const pct = (n: number) => Math.round((SUBS * n) / 100);
   const statusPool: SubscriptionStatus[] = [
-    ...Array<SubscriptionStatus>(380).fill('active'),
-    ...Array<SubscriptionStatus>(40).fill('confirmed'),
-    ...Array<SubscriptionStatus>(30).fill('draft'),
-    ...Array<SubscriptionStatus>(20).fill('quotation'),
-    ...Array<SubscriptionStatus>(10).fill('paused'),
-    ...Array<SubscriptionStatus>(20).fill('closed'),
+    ...Array<SubscriptionStatus>(pct(76)).fill('active'),
+    ...Array<SubscriptionStatus>(pct(8)).fill('confirmed'),
+    ...Array<SubscriptionStatus>(pct(6)).fill('draft'),
+    ...Array<SubscriptionStatus>(pct(4)).fill('quotation'),
+    ...Array<SubscriptionStatus>(pct(2)).fill('paused'),
+    ...Array<SubscriptionStatus>(pct(4)).fill('closed'),
   ];
 
   let subNo = await maxNumber('SUB', 'subscriptions');

@@ -42,6 +42,12 @@ npm run dev                # http://localhost:5173
 | `server/src/{sales,billing,payments,reports}/` | subscriptions, invoices, payments, reports | Dev B |
 | `web/` | React app | Dev C |
 
+## System design & scaling
+
+This is a modular monolith (NestJS + PostgreSQL) chosen deliberately: at 3 devs and 5k subscriptions, one deployable with DB-enforced invariants beats microservices. The full reasoning — decisions table, failure stress-test, scaling-ladder position, and the numbered roadmap (what we build when load actually demands it) — lives in [docs/design/brightloop-sms.md](docs/design/brightloop-sms.md).
+
+**Measured at 5,000+ subscriptions / 8,000+ invoices:** dashboard summary 25ms · overdue report 149ms · list endpoints < 25ms — an order of magnitude inside the PRD's 2-second target. Verified by 139 automated tests (unit + domain + integration), including concurrency edge cases (parallel billing runs, double-clicked payments).
+
 ## Docs
 
 - [docs/api-contract.md](docs/api-contract.md) — frozen endpoint shapes

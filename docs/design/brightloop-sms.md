@@ -36,10 +36,10 @@
 
 | Failure | Today's behavior | Containment (P0 = before demo) |
 |---|---|---|
-| Browser → API first contact | **CORS not enabled — every POST from :5173 fails preflight. Demo-blocker.** | P0: `enableCors` with origin allowlist |
-| Two simultaneous "Run billing" clicks | Constraint prevents duplicates ✓, but double work + lying summary | P0: `pg_try_advisory_lock`; concurrent run returns `already_running` |
-| Two simultaneous payments on one invoice | Both read `outstanding=100`, both succeed → **overpayment** | P0: `SELECT … FOR UPDATE` on invoice row in the payment tx |
-| Demo machine ≠ IST timezone | "Billing day" shifts by 5.5h silently | P0: explicit `BUSINESS_TZ` config for day boundaries |
+| Browser → API first contact | CORS was absent — every POST preflight failed. | ✅ **Implemented**: `enableCors` with `CORS_ORIGINS` allowlist (+ test) |
+| Two simultaneous "Run billing" clicks | Constraint prevents duplicates ✓, but double work + lying summary | ✅ **Implemented**: `pg_try_advisory_lock` (session-pinned); concurrent run returns `already_running` (+ test) |
+| Two simultaneous payments on one invoice | Both read `outstanding=100`, both succeed → **overpayment** | ✅ **Implemented**: `SELECT … FOR UPDATE` on the invoice row (+ test) |
+| Demo machine ≠ IST timezone | "Billing day" shifts by 5.5h silently | **Deferred (roadmap #1)**: demo machine is IST; make day boundaries `BUSINESS_TZ`-explicit when deploying elsewhere |
 | Cron absent | Renewals/expiry reminders never fire — the PRD's original pain returns | P1: `@nestjs/schedule` 00:05 IST (jittered off :00 per task-scheduling skill), same `run()`; advisory lock = split-brain guard |
 | Disk dies / `compose down -v` | Total data loss; no backups exist | P1: nightly `pg_dump` to a volume (PRD §9.4) |
 | Brute-force `/auth/login` | Unthrottled | P1: `@nestjs/throttler` 5/min on auth (fail-closed) |
